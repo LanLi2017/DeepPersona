@@ -64,3 +64,32 @@ def gsm8k_score(pred: str | None, gold: str) -> bool:
         return float(gp) == float(gg)
     except ValueError:
         return False
+
+
+# ── CommonsenseQA: extract a single A-E letter ────────────────────────────
+CSQA_BOXED_RE = re.compile(r"\\boxed\{\s*([A-Ea-e])\b")
+CSQA_ANSWER_RE = re.compile(r"answer\s*(?:is|:)\s*\(?\s*([A-Ea-e])\b", re.IGNORECASE)
+CSQA_OPTION_RE = re.compile(r"\b([A-E])\s*[).:]")           # "C)" / "C." / "C:"
+CSQA_BARE_RE = re.compile(r"(?<![A-Za-z])([A-E])(?![A-Za-z])")  # standalone uppercase letter
+
+
+def extract_csqa_pred(text: str) -> str | None:
+    for rx in (CSQA_BOXED_RE, CSQA_ANSWER_RE, CSQA_OPTION_RE, CSQA_BARE_RE):
+        m = rx.findall(text)
+        if m:
+            return m[-1].upper()
+    return None
+
+
+def csqa_score(pred: str | None, gold: str) -> bool:
+    if pred is None or not gold:
+        return False
+    return pred.strip().upper() == gold.strip().upper()
+
+
+def extract_pred(task: str, text: str) -> str | None:
+    return extract_gsm8k_pred(text) if task == "gsm8k" else extract_csqa_pred(text)
+
+
+def score(task: str, pred: str | None, gold: str) -> bool:
+    return gsm8k_score(pred, gold) if task == "gsm8k" else csqa_score(pred, gold)

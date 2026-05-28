@@ -32,7 +32,7 @@ def make_run_dir(base: Path, cfg: RunConfig) -> Path:
     sha = _git(["rev-parse", "--short", "HEAD"], base) or "nogit"
     name = f"{ts}-{sha}-{cfg.run_name}-{cfg.task}-{cfg.condition}"
     if cfg.condition == "prompt" and cfg.persona_idx >= 0:
-        name += f"-p{cfg.persona_idx}"
+        name += f"-p{cfg.persona_idx}-{cfg.persona_level}"
     if cfg.smoke:
         name += "-smoke"
     run_dir = base / "runs" / name

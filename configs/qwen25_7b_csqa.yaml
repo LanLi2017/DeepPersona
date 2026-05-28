@@ -1,0 +1,25 @@
+# Qwen2.5-7B-Instruct on CommonsenseQA (CSQA), 5-way multiple choice.
+# Eval split = CSQA validation (1221); calib/val = 200-slices of train.
+# Same pinned revision + matched decoding budget as the GSM8K config.
+model_id: Qwen/Qwen2.5-7B-Instruct
+model_revision: a09a35458c702b33eeacc393d103063234e8bc28
+dtype: bfloat16
+device: cuda
+
+task: csqa
+condition: none
+persona_idx: -1
+persona_level: basic
+neutral_template_idx: 0
+
+# Matched across all conditions (design doc §3.4). Commonsense CoT is short;
+# 512 leaves ample headroom and avoids truncation for structured personas.
+max_new_tokens: 512
+batch_size: 8
+
+seed: 0
+split: val
+n_items: null
+
+run_name: baseline
+smoke: false

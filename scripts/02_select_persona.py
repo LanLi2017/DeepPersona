@@ -21,11 +21,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from deeppersona.config import add_overrides, apply_overrides, load_config
-from deeppersona.data import load_gsm8k_items
+from deeppersona.data import load_items
 from deeppersona.generate import build_chat_prompts, generate_iter, load_model
 from deeppersona.manifest import make_run_dir, write_manifest
-from deeppersona.personas import MATH_PERSONAS, system_message
-from deeppersona.verifiers import extract_gsm8k_pred, gsm8k_score
+from deeppersona.personas import num_personas, system_message
+from deeppersona.verifiers import extract_pred, score
 
 
 def main() -> int:
@@ -46,16 +46,18 @@ def main() -> int:
     write_manifest(run_dir, cfg, REPO_ROOT)
     print(f"[run] {run_dir}", flush=True)
 
-    items = load_gsm8k_items(cfg.split, n_items=cfg.n_items, seed=cfg.seed)
+    items = load_items(cfg.task, cfg.split, n_items=cfg.n_items, seed=cfg.seed)
     user_msgs = [it["question"] for it in items]
-    print(f"[data] {len(items)} val items", flush=True)
+    print(f"[data] {len(items)} {cfg.task}/{cfg.split} items", flush=True)
 
     model, tok = load_model(cfg)
     print(f"[model] {cfg.model_id}@{cfg.model_revision[:8]} on {model.device}", flush=True)
 
     # Also include C-none as a reference baseline in the sweep.
-    sweep: list[tuple[int, str]] = [(-1, system_message(-1, cfg.neutral_template_idx))]
-    sweep += [(i, system_message(i, cfg.neutral_template_idx)) for i in range(len(MATH_PERSONAS))]
+    lvl = cfg.persona_level
+    sweep: list[tuple[int, str]] = [(-1, system_message(cfg.task, -1, cfg.neutral_template_idx))]
+    sweep += [(i, system_message(cfg.task, i, cfg.neutral_template_idx, lvl)) for i in range(num_personas(cfg.task))]
+    print(f"[level] persona scaffolding = {lvl}", flush=True)
 
     results: list[dict] = []
     sweep_t0 = time.time()
@@ -71,7 +73,7 @@ def main() -> int:
             gens.extend(batch)
             for g in batch:
                 it = items[len(correct)]
-                correct.append(gsm8k_score(extract_gsm8k_pred(g), it["gold_answer"]))
+                correct.append(score(cfg.task, extract_pred(cfg.task, g), it["gold_answer"]))
             n_so_far = len(gens)
             acc_so_far = sum(correct) / n_so_far
             elapsed = time.time() - t0
@@ -80,7 +82,7 @@ def main() -> int:
                   f"n={n_so_far:>3d}/{len(prompts)} acc={acc_so_far:.3f} "
                   f"elapsed={elapsed:.1f}s eta={eta:.1f}s", flush=True)
         acc = sum(correct) / len(correct)
-        n_parse_fail = sum(1 for g in gens if extract_gsm8k_pred(g) is None)
+        n_parse_fail = sum(1 for g in gens if extract_pred(cfg.task, g) is None)
         row = {
             "persona_idx": persona_idx,
             "persona_text": sys_msg,
@@ -106,6 +108,7 @@ def main() -> int:
         "split": cfg.split,
         "model_id": cfg.model_id,
         "model_revision": cfg.model_revision,
+        "persona_level": lvl,
         "best_persona_idx": best["persona_idx"],
         "best_persona_text": best["persona_text"],
         "best_persona_accuracy": best["accuracy"],

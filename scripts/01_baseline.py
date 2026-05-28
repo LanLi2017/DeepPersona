@@ -21,12 +21,12 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from deeppersona.config import RunConfig, add_overrides, apply_overrides, load_config
-from deeppersona.data import load_gsm8k_items
+from deeppersona.config import add_overrides, apply_overrides, load_config
+from deeppersona.data import load_items
 from deeppersona.generate import build_chat_prompts, generate_iter, load_model
 from deeppersona.manifest import append_item, make_run_dir, write_manifest, write_metrics
-from deeppersona.personas import MATH_PERSONAS, system_message
-from deeppersona.verifiers import extract_gsm8k_pred, gsm8k_score
+from deeppersona.personas import num_personas, system_message
+from deeppersona.verifiers import extract_pred, score
 
 
 def bootstrap_ci(correct: list[bool], n_resamples: int = 10_000, alpha: float = 0.05, seed: int = 0):
@@ -48,8 +48,8 @@ def main() -> int:
 
     cfg = apply_overrides(load_config(args.config), args)
 
-    if cfg.condition == "prompt" and not (0 <= cfg.persona_idx < len(MATH_PERSONAS)):
-        raise SystemExit(f"--persona-idx must be in [0, {len(MATH_PERSONAS)}) for condition=prompt")
+    if cfg.condition == "prompt" and not (0 <= cfg.persona_idx < num_personas(cfg.task)):
+        raise SystemExit(f"--persona-idx must be in [0, {num_personas(cfg.task)}) for task={cfg.task}")
     if cfg.condition == "none":
         cfg.persona_idx = -1
 
@@ -61,16 +61,13 @@ def main() -> int:
     write_manifest(run_dir, cfg, REPO_ROOT)
     print(f"[run] {run_dir}", flush=True)
 
-    if cfg.task != "gsm8k":
-        raise SystemExit(f"task={cfg.task} not implemented in 01_baseline.py")
-
-    items = load_gsm8k_items(cfg.split, n_items=cfg.n_items, seed=cfg.seed)
-    print(f"[data] {len(items)} items from gsm8k/{cfg.split}", flush=True)
+    items = load_items(cfg.task, cfg.split, n_items=cfg.n_items, seed=cfg.seed)
+    print(f"[data] {len(items)} items from {cfg.task}/{cfg.split}", flush=True)
 
     model, tok = load_model(cfg)
     print(f"[model] {cfg.model_id}@{cfg.model_revision[:8]} on {model.device}", flush=True)
 
-    sys_msg = system_message(cfg.persona_idx, cfg.neutral_template_idx)
+    sys_msg = system_message(cfg.task, cfg.persona_idx, cfg.neutral_template_idx, cfg.persona_level)
     prompts = build_chat_prompts(tok, sys_msg, [it["question"] for it in items])
 
     if cfg.smoke:
@@ -86,8 +83,8 @@ def main() -> int:
             i = bi * cfg.batch_size + j
             it = items[i]
             prompt = prompts[i]
-            pred = extract_gsm8k_pred(gen)
-            ok = gsm8k_score(pred, it["gold_answer"])
+            pred = extract_pred(cfg.task, gen)
+            ok = score(cfg.task, pred, it["gold_answer"])
             if pred is None:
                 parse_fail += 1
             correct.append(ok)

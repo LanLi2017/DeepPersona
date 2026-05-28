@@ -17,6 +17,7 @@ class RunConfig:
     task: str = "gsm8k"
     condition: str = "none"            # "none" | "prompt" | "vec"
     persona_idx: int = -1              # -1 == no persona (used for "none")
+    persona_level: str = "basic"       # "basic" | "structured" (scaffolding richness)
     neutral_template_idx: int = 0      # which neutral template to use as system msg
 
     max_new_tokens: int = 512
@@ -45,6 +46,7 @@ def add_overrides(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--task", default=None)
     parser.add_argument("--condition", default=None, choices=["none", "prompt", "vec"])
     parser.add_argument("--persona-idx", type=int, default=None)
+    parser.add_argument("--persona-level", default=None, choices=["basic", "structured"])
     parser.add_argument("--neutral-template-idx", type=int, default=None)
     parser.add_argument("--max-new-tokens", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=None)
