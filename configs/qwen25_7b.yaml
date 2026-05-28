@@ -1,0 +1,22 @@
+# Qwen2.5-7B-Instruct config. Pin commit; do not float on `main` (CLAUDE.md).
+# Revision lookup: huggingface.co/api/models/Qwen/Qwen2.5-7B-Instruct -> sha
+model_id: Qwen/Qwen2.5-7B-Instruct
+model_revision: a09a35458c702b33eeacc393d103063234e8bc28
+dtype: bfloat16
+device: cuda
+
+task: gsm8k
+condition: none
+persona_idx: -1
+neutral_template_idx: 0
+
+# Matched across all conditions (design doc §3.4: verbosity cannot confound).
+max_new_tokens: 512
+batch_size: 8
+
+seed: 0
+split: val
+n_items: null
+
+run_name: baseline
+smoke: false
