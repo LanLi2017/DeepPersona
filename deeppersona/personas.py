@@ -408,7 +408,7 @@ CSQA_SPECS: list[dict] = [
     },
 ]
 
-TASK_SPECS: dict[str, list[dict]] = {"gsm8k": MATH_SPECS, "csqa": CSQA_SPECS}
+TASK_SPECS: dict[str, list[dict]] = {"gsm8k": MATH_SPECS, "csqa": CSQA_SPECS, "math": MATH_SPECS}
 
 # At least three minimal neutral templates (Section 9 #8); task-agnostic.
 NEUTRAL_TEMPLATES: list[str] = [
@@ -421,6 +421,7 @@ NEUTRAL_TEMPLATES: list[str] = [
 ANSWER_INSTRUCTION: dict[str, str] = {
     "gsm8k": " Put your final numeric answer inside \\boxed{}.",
     "csqa": " End with the single letter (A, B, C, D, or E) of the correct option inside \\boxed{}.",
+    "math": " Put your final answer inside \\boxed{}.",  # MATH-500 answers aren't always numeric
 }
 
 PERSONA_LEVELS = ("basic", "structured")
@@ -428,6 +429,34 @@ PERSONA_LEVELS = ("basic", "structured")
 
 def num_personas(task: str) -> int:
     return len(TASK_SPECS[task])
+
+
+# Strategy/method axes (F0a pool #2): genuinely different solution *approaches*, phrased as binding
+# directives ("solve by DOING X"), not identities ("you are an X"). Tests whether method diversity
+# (unlike the redundant identity-personas) produces non-redundant pass@k coverage.
+STRATEGY_AXES: list[str] = [
+    "Solve the problem by translating it into algebraic equations with explicitly named variables, then solving the system symbolically.",
+    "Solve the problem by reasoning backwards: start from the quantity being asked for and work step by step back to the given information.",
+    "Solve the problem by working through the arithmetic step by step in the order events occur, without introducing any variables.",
+    "Solve the problem by first estimating the rough size of the answer, then computing it exactly and checking the exact result against your estimate.",
+    "Solve the problem by breaking it into independent sub-problems, solving each one separately, then combining the partial results.",
+    "Solve the problem by trying the smallest or simplest cases first to discover the underlying pattern, then applying that pattern to the full problem.",
+    "Solve the problem by enumerating the distinct cases or possibilities exhaustively and handling each case separately.",
+    "Solve the problem by tracking units, rates, and proportions explicitly, reasoning through ratios rather than raw numbers.",
+    "Solve the problem by setting up a clear diagram or spatial picture of the situation and reasoning geometrically about it.",
+    "Solve the problem by testing concrete candidate values against the stated conditions and adjusting them until everything is consistent.",
+    "Solve the problem by looking for a symmetry, invariant, or conserved quantity that makes the answer fall out more directly.",
+    "Solve the problem by finding the most direct, concise path to the answer with no unnecessary intermediate work.",
+]
+
+
+def strategy_message(task: str, strat_idx: int) -> str:
+    """Strategy-axis system message: a method directive + the task answer instruction."""
+    return STRATEGY_AXES[strat_idx] + ANSWER_INSTRUCTION[task]
+
+
+def num_strategies() -> int:
+    return len(STRATEGY_AXES)
 
 
 def structured_persona(task: str, persona_idx: int) -> str:
