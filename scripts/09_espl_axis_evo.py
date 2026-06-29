@@ -225,7 +225,7 @@ def main() -> int:
     p.add_argument("--mutation-model", default="gpt-4.1")
     p.add_argument("--mutation-temp", type=float, default=0.7)
     p.add_argument("--mutation-max-tokens", type=int, default=4000)
-    p.add_argument("--axis-set", default="persona5", choices=["persona5", "flat"])
+    p.add_argument("--axis-set", default="persona5", choices=["persona5", "compmath", "flat"])
     # evolution
     p.add_argument("--n-steps", type=int, default=30)
     p.add_argument("--batch-size", type=int, default=8)
