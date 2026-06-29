@@ -85,12 +85,15 @@ def load_train(args, seed):
 def load_test(args, seed):
     from datasets import load_dataset
 
+    allowed = set(args.levels.split(",")) if args.levels else set()  # match eval headroom to train levels
     ds = load_dataset("HuggingFaceH4/MATH-500", split="test")
     items = []
     for i, r in enumerate(ds):
+        if allowed and not _level_ok(r.get("level", ""), allowed):
+            continue
         gold = r.get("answer") or extract_boxed(r["solution"])
         items.append({"idx": i, "problem": r["problem"], "gold": gold, "level": r.get("level", "")})
-    random.Random(seed + 1).shuffle(items)
+    random.Random(20260629).shuffle(items)  # FIXED across training seeds -> paired eval, training-variance-only CIs
     if args.n_test > 0:
         items = items[: args.n_test]
     return items
