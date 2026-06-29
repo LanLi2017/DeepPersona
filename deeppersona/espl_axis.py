@@ -40,6 +40,17 @@ _AXIS_SETS = {
             "other": "Other: a genuinely general, cross-cutting takeaway that fits none of the axes above. Use sparingly.",
         },
     ),
+    "compmath": (  # task-specific axes for competition math (AIME-style)
+        ["setup", "technique", "casework", "computation", "verification", "other"],
+        {
+            "setup": "Reading & re-encoding the problem: pick good variables/coordinates, restate constraints precisely, name the key quantity or invariant, and exploit symmetry before computing.",
+            "technique": "Which competition method to reach for, by domain: modular arithmetic / CRT (number theory); complementary & bijective counting (combinatorics); Vieta's, factoring, substitution (algebra); coordinates, trig, power-of-a-point (geometry); generating functions, recursion, telescoping.",
+            "casework": "Enumeration discipline: partition into exhaustive, disjoint cases; bound the search space first; track which cases remain; avoid double-counting and dropped cases.",
+            "computation": "Exact-arithmetic control: keep fractions/radicals exact, simplify before expanding, defer numeric evaluation, and re-check heavy multiplications or large factorials.",
+            "verification": "Answer-form checks: the final answer is a non-negative integer (AIME: 0-999) — verify it lands in the expected range; substitute the solution back into every constraint; confirm against a small case, parity, or a modular residue.",
+            "other": "A genuinely cross-cutting takeaway that fits none of the axes above. Use sparingly.",
+        },
+    ),
     "flat": (  # ablation: minimal structure, closest to flat E-SPL
         ["strategy", "other"],
         {
@@ -124,20 +135,23 @@ class OpenAIChat:
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
+        # reasoning models (o*/gpt-5*) reject temperature/max_tokens and burn the
+        # completion budget on hidden reasoning -> use max_completion_tokens with headroom.
+        self.is_reasoning = model.startswith(("o1", "o3", "o4", "gpt-5"))
         self.pool = ThreadPoolExecutor(max_workers=max_workers)
         self.n_calls = 0
 
     def __call__(self, prompt: str) -> str:
         self.n_calls += 1
         msgs = [{"role": "user", "content": prompt}]
-        try:
+        if self.is_reasoning:
+            r = self.client.chat.completions.create(
+                model=self.model, messages=msgs,
+                max_completion_tokens=max(self.max_tokens, 16000))
+        else:
             r = self.client.chat.completions.create(
                 model=self.model, messages=msgs,
                 temperature=self.temperature, max_tokens=self.max_tokens)
-        except Exception as e:  # reasoning models (o*/gpt-5): no temperature, max_completion_tokens
-            print(f"[openai] retry w/ max_completion_tokens ({type(e).__name__}: {str(e)[:120]})", flush=True)
-            r = self.client.chat.completions.create(
-                model=self.model, messages=msgs, max_completion_tokens=self.max_tokens)
         return r.choices[0].message.content or ""
 
     def map(self, prompts: list[str]) -> list[str]:
