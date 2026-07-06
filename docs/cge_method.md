@@ -16,8 +16,10 @@ Abandoning winners:** with no correctness oracle, the orchestrator diversifies a
 approaches too (P(wrong | gold already found) = 0.195 vs 0.131 for neutral). **(M3) An
 unconditional directive tax:** forcing off-default methods lowers the per-try hit rate even after
 failures (0.203 vs 0.253), because failure in this regime is execution *depth*, not strategy
-choice. Consensus-Gated Escalation (CGE) is the constructive counterpart: an orchestration method
-whose design makes each mechanism structurally impossible.
+choice. Concrete per-problem case studies for each mechanism appear in
+`frontier_inference_diversity.md` §Case studies. Consensus-Gated Escalation (CGE) is the
+constructive counterpart: an orchestration method whose design makes each mechanism structurally
+impossible.
 
 ## Method
 

@@ -92,6 +92,42 @@ blind medium-effort calls — two plain neutral, one "restate the problem from s
 multiset only*, never derivations. Selection is a pre-registered weighted vote (escalated
 attempts ×2, verifier breaks ties).
 
+### Case studies behind the three design rules
+
+**Rule 1 — information diet (problem 16: anchoring in action).** Gold is 42; under neutral
+resampling the model finds it on 2 of 8 independent tries, with a wrong modal answer (95/4) on the
+other six. In the adaptive chain, *all eight* attempts return 95/4 — because the orchestrator,
+having read the majority-wrong attempts, writes their flawed setup directly into its directives:
+attempt 4's directive states *"Compute p by observing max_i f(a_i) = 6 − min(a_i), so
+p = (6 − E[min])/36"* — the erroneous reduction itself, issued as an instruction. The seven
+"different strategies" are seven computational routes through the same wrong interpretation, and
+the 25% chance per independent draw of escaping that basin drops to zero. Hence: nothing that any
+attempt derived may reach any other attempt.
+
+**Rule 2 — never re-open a consensus (problem 12: a winner abandoned).** Attempt 0, under the
+neutral prompt, immediately finds the gold answer 27. The orchestrator — blind to correctness —
+then steers attempt 1 to *"Apply Hölder (or AM-GM) to show (∑aᵢ)³ ≥ 27·∑aᵢaᵢ₊₁aᵢ₊₂; then bound
+each gcd·lcm ≤ …"*, attempt 2 to prime-power worst cases, attempt 3 to prime-by-prime exponent
+decomposition. All seven redirected attempts return 36; the correct answer never recurs, and 36
+wins any vote. In aggregate this is the abandon-winner statistic: P(wrong at attempt *t* | gold
+already found earlier in the chain) = 0.195 versus 0.131 for neutral resampling. Hence: once
+independent attempts agree, the pipeline stops — agreement is the closest thing to an oracle
+available, and disturbing it has negative expected value.
+
+**Rule 3 — escalate effort, not strategy (problem 18: method variety is orthogonal to the
+failure).** Gold is 48; neutral sampling finds it once in 8, stalling otherwise at 40. The
+orchestrator supplies genuinely diverse techniques — graph matching, 3×3-block tiling,
+double-counting, a 25-color periodic coloring, disjoint 5×5-block partitions — and every one of
+them derives 40: the bottleneck was never the choice of technique but the depth of execution, so
+strategy substitution just changes the road to the same wrong bound. The aggregate signature
+agrees: fully generic "use a different method" directives score worst of all (0.489), and
+redirection does not even help after a failure (P(correct | previous wrong) = 0.203 vs 0.253 for
+plain resampling). Conversely, in CGE's escalation round the *plain* neutral samples at higher
+reasoning effort are the strongest members (0.82/0.79 per attempt on the hardest problems — e.g.
+problem 7, where round 1 split and all four blind medium-effort calls independently converge on
+the correct 16). Hence: banked budget buys deeper thinking on the model's own approach, never a
+prescribed alternative.
+
 **Result.** Against the deployable baseline (majority vote over 8 neutral samples, 0.770), CGE
 reaches **0.880** — a paired improvement of **+0.110 [+0.050, +0.180]** — with gains exactly where
 designed: the unanimous bin is untouched (0.903), the weak-consensus bin rises 0.500 → 0.833 and
