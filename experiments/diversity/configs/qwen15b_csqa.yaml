@@ -1,0 +1,11 @@
+# Qwen2.5-1.5B-Instruct on CSQA val (200 items).
+# Pin revision before first run:
+#   python -c "from huggingface_hub import model_info; m=model_info('Qwen/Qwen2.5-1.5B-Instruct'); print(m.sha)"
+model_id: Qwen/Qwen2.5-1.5B-Instruct
+model_revision: null   # TODO: pin commit hash
+
+n_items: 50            # val slice; set null for full 1221
+n_rollouts: 8
+max_new_tokens: 256    # 1.5B is less verbose; 256 covers CSQA CoT
+batch_size: 16
+seed: 0
