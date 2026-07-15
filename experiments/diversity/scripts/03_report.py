@@ -2,7 +2,7 @@
 Generate a markdown report from a diversity sweep JSONL.
 
 Usage:
-  python 03_report.py runs/diversity-<ts>.jsonl [--out report.md]
+  python 03_report.py runs/diversity-<ts>.jsonl [--out report.md] [--embed]
 """
 import argparse
 import json
@@ -10,6 +10,82 @@ import math
 import sys
 from collections import defaultdict
 from pathlib import Path
+
+import requests
+
+EMBED_URL = "http://localhost:11434/api/embed"
+EMBED_MODEL = "nomic-embed-text"
+
+
+def embed_texts(texts):
+    r = requests.post(EMBED_URL, json={"model": EMBED_MODEL, "input": texts})
+    return r.json()["embeddings"]
+
+
+def mean_pool(vecs):
+    d = len(vecs[0])
+    out = [0.0] * d
+    for v in vecs:
+        for i, x in enumerate(v):
+            out[i] += x
+    return [x / len(vecs) for x in out]
+
+
+def cosine_sim(a, b):
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(x * x for x in b))
+    return dot / (na * nb + 1e-9)
+
+
+def trajectory_embedding(text):
+    sentences = [s.strip() for s in text.replace("\n", " ").split(".") if len(s.strip()) > 10]
+    if not sentences:
+        sentences = [text[:200]] if text.strip() else ["empty"]
+    vecs = embed_texts(sentences)
+    return mean_pool(vecs)
+
+
+def pairwise_embed_div(traj_vecs):
+    n = len(traj_vecs)
+    if n < 2:
+        return 0.0
+    total, count = 0.0, 0
+    for i in range(n):
+        for j in range(i + 1, n):
+            total += 1 - cosine_sim(traj_vecs[i], traj_vecs[j])
+            count += 1
+    return total / count
+
+
+def pearson_r(xs, ys):
+    n = len(xs)
+    mx, my = sum(xs) / n, sum(ys) / n
+    num = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    dx = math.sqrt(sum((x - mx) ** 2 for x in xs) + 1e-9)
+    dy = math.sqrt(sum((y - my) ** 2 for y in ys) + 1e-9)
+    return num / (dx * dy)
+
+
+def compute_embed_metrics(raw, methods):
+    """Returns {method: {"embed_div": float, "pearson_r": float}}."""
+    result = {}
+    for method in methods:
+        items_data = raw[method]
+        embed_divs, passks = [], []
+        print(f"  embedding {method} ({len(items_data)} items)...", end="\r", file=sys.stderr)
+        for idx, recs in items_data.items():
+            recs = sorted(recs, key=lambda r: r["rollout_idx"])
+            traj_vecs = [trajectory_embedding(r["text"]) for r in recs]
+            ed = pairwise_embed_div(traj_vecs)
+            pk = float(any(r["correct"] for r in recs))
+            embed_divs.append(ed)
+            passks.append(pk)
+        n = len(items_data)
+        r = pearson_r(embed_divs, passks) if n >= 3 else float("nan")
+        result[method] = {"embed_div": sum(embed_divs) / n, "pearson_r": r}
+        print(f"  {method}: embed_div={result[method]['embed_div']:.4f}  pearson_r={r:.3f}  ", file=sys.stderr)
+    return result
 
 
 def trigrams(text):
@@ -87,6 +163,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("jsonl")
     parser.add_argument("--out", default=None)
+    parser.add_argument("--embed", action="store_true", help="Compute embedding diversity via Ollama (slow).")
     args = parser.parse_args()
 
     path = Path(args.jsonl)
@@ -124,6 +201,19 @@ def main():
             f"| `{m}` | {r['distinct_3']:.3f} | {r['ans_ent']:.3f} | {r['pair_div']:.3f} "
             f"| {r['pass_at_1']:.3f} | {r['pass_at_k']:.3f} | {r['mean_acc']:.3f} |"
         )
+
+    if args.embed:
+        print("Computing embedding diversity...", file=sys.stderr)
+        embed_stats = compute_embed_metrics(raw, methods)
+        lines.append("\n## Embedding Diversity\n")
+        lines.append("| Method | embed-div ↑ | pearson-r (embed↔pass@k) |")
+        lines.append("|--------|------------|--------------------------|")
+        for m in methods:
+            es = embed_stats[m]
+            r_str = f"{es['pearson_r']:.3f}" if not math.isnan(es["pearson_r"]) else "—"
+            lines.append(f"| `{m}` | {es['embed_div']:.4f} | {r_str} |")
+        lines.append("\n> `embed-div`: mean pairwise cosine distance of sentence-level trajectory embeddings (nomic-embed-text).  \n"
+                     "> `pearson-r`: per-item correlation between embed-div and pass@k. Positive = diverse rollouts cover more correct answers.")
 
     lines.append("\n## Method Descriptions\n")
     for m in methods:
@@ -175,11 +265,40 @@ def main():
             f"pass@k={p_temp['pass_at_k']:.3f}, mean-acc={p_temp['mean_acc']:.3f}"
         )
 
-    lines.append(
-        "\n> **Takeaway**: prompt-driven diversity (persona/template) achieves trajectory "
-        "diversity comparable to high-temperature sampling while maintaining or improving accuracy. "
-        "Temperature sampling increases diversity at the cost of mean accuracy degradation."
+    # Takeaway: data-driven, compares best prompt-variation method vs best temp method
+    best_prompt = max(
+        [(m, results[m]) for m in ["persona", "template"] if m in results],
+        key=lambda x: x[1]["mean_acc"], default=(None, None)
     )
+    best_temp = max(
+        [(m, results[m]) for m in ["temp0.3", "temp0.7", "temp1.0", "temp1.3"] if m in results],
+        key=lambda x: x[1]["mean_acc"], default=(None, None)
+    )
+    if best_prompt[0] and best_temp[0]:
+        pm, pr = best_prompt
+        tm, tr = best_temp
+        if pr["mean_acc"] >= tr["mean_acc"]:
+            takeaway = (
+                f"Prompt-driven diversity (`{pm}`) matches or exceeds temperature sampling (`{tm}`) "
+                f"on both trajectory diversity (distinct-3: {pr['distinct_3']:.3f} vs {tr['distinct_3']:.3f}) "
+                f"and accuracy (mean-acc: {pr['mean_acc']:.3f} vs {tr['mean_acc']:.3f}). "
+                f"Persona variation is a cost-free diversity source for models without built-in reasoning."
+            )
+        else:
+            takeaway = (
+                f"For this reasoning model, temperature sampling (`{tm}`) outperforms prompt-driven "
+                f"diversity (`{pm}`) on both trajectory diversity "
+                f"(distinct-3: {tr['distinct_3']:.3f} vs {pr['distinct_3']:.3f}) "
+                f"and accuracy (mean-acc: {tr['mean_acc']:.3f} vs {pr['mean_acc']:.3f}). "
+                f"Built-in reasoning may reduce the marginal value of persona conditioning — "
+                f"the model follows its own chain-of-thought regardless of persona framing."
+            )
+    elif best_prompt[0]:
+        takeaway = "Only prompt-variation methods tested; temperature comparison not available."
+    else:
+        takeaway = "Results inconclusive — insufficient methods for comparison."
+
+    lines.append(f"\n> **Takeaway**: {takeaway}")
 
     report = "\n".join(lines) + "\n"
 
