@@ -263,7 +263,7 @@ def main():
     for step in range(max(args.n_steps, 1)):
         t0 = time.time()
         # refresh on-policy sampler from current weights (avoid stale-sampler desync)
-        spath = training_client.save_weights_for_sampler(name=f"{step:06d}").result().path
+        spath = training_client.save_weights_for_sampler(name=f"{step:06d}", ttl_seconds=7 * 24 * 3600).result().path
         sampling_client = svc.create_sampling_client(model_path=spath)
 
         # held-out neutral eval (internalization): at step 0, every eval_every, and final
