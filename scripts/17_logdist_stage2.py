@@ -162,6 +162,7 @@ def train_l15():
     from sklearn.metrics import roc_auc_score
 
     for base, npz in (("l1", "emb_l1.npz"), ("l4_L18", "emb_l4.npz")):
+        torch.manual_seed(0)
         E = torch.tensor(np.load(TB / npz)[base]).float().cuda()
         by_q = collections.defaultdict(dict)
         for p in paras:
@@ -185,6 +186,7 @@ def train_l15():
         with torch.no_grad():
             F = torch.nn.functional.normalize(W(E), dim=-1).cpu().numpy()
         np.savez(TB / f"emb_l15_{base}.npz", **{f"l15_{base}": F})
+        torch.save(W.state_dict(), TB / f"head_l15_{base}.pt")  # else new texts can't be scored
         d = lambda a, b: float(1 - F[idx[a]] @ F[idx[b]])
         neg_t = [d(f"n{p['qidx']}_{p['samp_i']}", f"n{p['qidx']}_{p['samp_j']}") for p in negs if p["qidx"] in test_q]
         print(f"== l15_{base} ==  (train pos={len(pos)} neg={len(neg_tr)}; final loss {loss.item():.3f})")
