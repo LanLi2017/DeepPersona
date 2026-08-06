@@ -105,10 +105,10 @@ the 25% chance per independent draw of escaping that basin drops to zero. Hence:
 attempt derived may reach any other attempt.
 
 **Rule 2 — never re-open a consensus (problem 12: a winner abandoned).** Attempt 0, under the
-neutral prompt, immediately finds the gold answer 27. The orchestrator — blind to correctness —
+neutral prompt, immediately finds the gold answer 2cases, attempt 3 to prime-by-prime exponent
+decomposition. All seven redirected attempts retur7. The orchestrator — blind to correctness —
 then steers attempt 1 to *"Apply Hölder (or AM-GM) to show (∑aᵢ)³ ≥ 27·∑aᵢaᵢ₊₁aᵢ₊₂; then bound
-each gcd·lcm ≤ …"*, attempt 2 to prime-power worst cases, attempt 3 to prime-by-prime exponent
-decomposition. All seven redirected attempts return 36; the correct answer never recurs, and 36
+each gcd·lcm ≤ …"*, attempt 2 to prime-power worst n 36; the correct answer never recurs, and 36
 wins any vote. In aggregate this is the abandon-winner statistic: P(wrong at attempt *t* | gold
 already found earlier in the chain) = 0.195 versus 0.131 for neutral resampling. Hence: once
 independent attempts agree, the pipeline stops — agreement is the closest thing to an oracle
@@ -164,5 +164,5 @@ and `scripts/analyze_infdiv.py` (paired analysis). CGE: `scripts/13_cge.py` — 
 first 4 samples of the existing neutral run (paired across methods; the "4 more low samples"
 ablation is samples 5–8 of the same run, ≙ maj@8); escalation = 4 medium-effort calls on the 28
 gated problems; offline `--simulate` mode reproduces the gate and baseline exactly before any
-spend. Total cost ≈ 7.1M completion tokens (~$200) for F2 + ≈1.3M (~$40) for CGE; future runs gate
+spend. Total cost ≈ 7.1M completion tokens (~~$200) for F2 + ≈1.3M (~~$40) for CGE; future runs gate
 any >$10 estimate on explicit approval.

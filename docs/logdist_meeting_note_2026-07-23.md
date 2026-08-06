@@ -193,6 +193,14 @@ strata with a bootstrap CI over strata.
    is a coverage-counting fact, not a reasoning fact, and it is trivially gameable because pooled
    recall does not penalize precision.
 
+6. **(added 2026-07-31) The metric is not yet reward-safe — 58% of its diversity score is buyable
+   for free.** V6, set level: four paraphrases of a single solution score 2.37 where four genuinely
+   distinct solutions score 3.36 (4 identical traces = 1.00 by construction). Held-out problems:
+   74% hackable. This is a null *about our own construct*, and it is the one that blocks the RL
+   application — but the same table is a strong positive for the framing, since every off-shelf
+   baseline is 88–113% hackable. Also a scope note: the attack set is four fixed rewrite styles,
+   so 58% is a **lower bound** on what an adaptive attacker would extract.
+
 The first two are publishable framing, not failures: "the metric works; on math the answer
 multiset is already a sufficient statistic — measured, not assumed; claims are enough, edges are
 not needed." The third is the methodological punchline: **every diversity→performance result we
@@ -205,7 +213,8 @@ design below.
   every variant (0.75–0.79); the ≥0.93-per-style claim is full-set. Likely bottleneck:
   supervision volume (150 positive pairs from 25 problems), not architecture.
 - Single domain (competition math, one generator model) so far.
-- V6 (gameability under optimization pressure) is required for the RL story and not yet run.
+- V6 ran 2026-07-31 (below). The weak spot above is exactly what V6 quantifies: the held-out
+  restructure+rename style is also the strongest free attack.
 
 ## 7. Next steps (in value order)
 
@@ -217,10 +226,23 @@ design below.
    band** (per-sample accuracy 0.5–0.85, no shared blind spot, small gold set) per the 07-30
    moderator result — a uniform draw spends most of the budget in regimes where the effect cannot
    exist by construction, and the blind-spot rate caps what is achievable.
-2. **V6 gameability probe** — Δmetric from a pure style attack vs a genuine method switch,
-   on existing pairs ($0). Headline differentiator vs embedding-based diversity rewards (GCPO).
-3. **Scale paraphrase supervision** (~$1–2) to push the LLM-free kernel pair past 0.9
-   held-out → a deployable *differentiable* GRPO diversity reward (wire into scripts/10).
+2. ~~V6 gameability probe~~ — **done 2026-07-31, `scripts/22_logdist_v6.py`, $0. Partial fail.**
+   Set-level (k=4 packs, Vendi; 4 identical traces = 1.00): a pack of 4 paraphrases of *one*
+   solution vs 4 genuinely distinct solutions. Every cheap baseline is ~fully gameable —
+   token-Jaccard 97% hackable, mpnet 93%, raw chunk 88%, raw Qwen 113% (style moves it *more*
+   than a method switch). **That contrast is the anti-GCPO result and it is now quantitative.**
+   But the adopted ensemble is only R = 1.72 [1.41, 2.02] → **58% of the reward is free**
+   (74% on held-out problems; R = 1.47 [1.15, 1.87] against the held-out restructure+rename
+   style). Padding (trace ++ paraphrase) does *not* work as an attack — Chamfer is
+   duplication-invariant — so the SWE-bench "wider net" failure does not transfer here.
+   **Reading: passes as a measurement instrument, fails as a standalone dense RL reward.**
+   Caveat: static probe with 4 fixed styles ⇒ a *lower bound* on hackability; n = 18 matched /
+   6 held-out problems.
+3. **Harden the metric against style attack, then re-run V6 as the acceptance test** (promoted
+   from #4 by the V6 result). Adversarial style mining — more, and deliberately held-out, rewrite
+   styles as training positives — is the cheap move (~$1–2, same budget as the supervision-scaling
+   item it subsumes). Target R_set ≥ 4–5 (≤25% hackable) against unseen styles before wiring
+   anything into GRPO as a dense reward (scripts/10). Threshold is post-hoc, not pre-registered.
 
 Operational lesson from 07-30: any future generation run must **persist full completions**, not a
 truncated tail — the E3 traces are unrecoverable without paying to regenerate them.

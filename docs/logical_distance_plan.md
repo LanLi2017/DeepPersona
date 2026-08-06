@@ -269,3 +269,165 @@ Generated:
     performance — on this task the cheapest way to raise both is to widen the net, which is
     exactly the gameability failure mode V6 was designed to detect. Strengthens the case that V6
     should run *before* any sampler-side optimization.
+- **2026-07-31 — V6 gameability probe (`scripts/22_logdist_v6.py`, $0): PARTIAL FAIL.**
+  The last unrun item in the pre-registered battery, and the one that decides whether the metric
+  can be an RL reward. V1/V2 asked whether the metric can *classify* paraphrase vs distinct-solution
+  pairs (ensemble AUC 0.972 / 0.929 held-out). V6 asks the different question that matters under
+  optimization pressure: **how much of the reward is obtainable for free?**
+  Design: 18 problems carrying both arms (50 paraphrased × 38 with distinct-answer pairs);
+  style arm = 4 rewrite styles of one trace (logic identical), method arm = distinct-answer pairs
+  on the same problem, padding arm = trace ++ paraphrase(trace) (logic identical, ~2× length,
+  re-encoded on GPU). Surface change = token-set Jaccard distance, which doubles as the pure-surface
+  baseline metric, so that baseline scores R = 1.00 by construction (built-in calibration).
+  Ensemble is the adopted 3-way, scaled by negative-pair sd but *not* mean-centred — V6 needs
+  ratios, which need a real zero (d(a,a)=0); an affine transform, so all AUCs are unchanged.
+  - **The deflationary baselines are ~fully gameable, quantitatively.** At set level (k=4 packs,
+    Vendi over exp(−d/τ), 4 identical traces = 1.00 by construction), a pack of **4 paraphrases of
+    a single solution** scores essentially the same as **4 genuinely distinct solutions**:
+    tok_jaccard 3.27 vs 3.34 (**97% hackable**), mpnet-chunk 3.09 vs 3.24 (93%), raw chunk 3.05 vs
+    3.31 (88%), raw Qwen L18 3.01 vs 2.78 (**113%** — style moves it *more* than a method switch).
+    This is the first direct quantitative case against embedding-based diversity rewards
+    (GCPO 2605.11461 runs DPP over off-shelf embeddings) and it is the headline differentiator §5
+    of the brainstorm doc asked for.
+  - **The trained metric is much better but not safe.** Ensemble set-level R = (Vm−1)/(Vs−1) =
+    **1.72 [1.41, 2.02] → 58% of the achievable diversity reward is buyable with zero change in
+    logic**; on held-out problems R = 1.36 (74% hackable). Pairwise held-out ensemble
+    R = 1.78 [1.48, 2.00]. Against the **held-out D_restructured style** (never seen in training,
+    also renames variables — the strongest free attack) held-out R = **1.47 [1.15, 1.87]**.
+  - **Component split is informative and non-obvious.** l15_trace is the least hackable at set level
+    (16%) but by far the most overfit (matched pairwise R = 34.4 → held-out 3.60, wide CI).
+    l2_claim is the most *stable* across the split (2.05 → 1.80 pairwise) — it is LLM claim
+    extraction, not a trained head, so there is no head to overfit — but weakest in absolute terms
+    (70% hackable at set level). l4_chunk sits between (41%, held-out R_set 1.53). The ensemble's
+    robustness comes from l2's stability, its ceiling from l15's discrimination.
+  - **The padding attack fails to land — genuine good news.** trace ++ paraphrase(trace) moves
+    l4_chunk *less* than a plain style rewrite (d = 0.083 vs 0.108); R = 5.62 [3.89, 7.60] pairwise,
+    R_set = 4.64. Chamfer matching is max-over-chunks, hence inherently duplication-invariant.
+    So the SWE-bench "wider net" failure mode does **not** transfer to this kernel by mere
+    length/repetition inflation. Caveat: this tests *duplication*, not "emit more distinct
+    candidates" — the latter is arguably a real diversity increase, not an attack.
+  - **Verdict.** Passes as a *measurement instrument* (large, robust margin over every cheap
+    baseline; C1 is beaten here, the first regime where it is). Fails as a *standalone dense RL
+    reward* at current strength: if ~60–75% of the reward is free, and style edits are cheaper and
+    lower-risk for the policy than genuine method switches (which can break correctness), the
+    expected equilibrium is style drift — the F0a/F2 inert-variation failure re-entering through
+    the reward. A rough target for reward-safety is R_set ≥ 4–5 (≤ 25% hackable) against held-out
+    attack styles; **note this threshold is post-hoc, not pre-registered.**
+  - **Caveats.** (i) Static probe with four fixed rewrite styles → a **lower bound** on
+    hackability; an adaptive attacker optimizing a rewriter against the metric would do strictly
+    better, so the true numbers are worse, not better. (ii) n is small: 18 matched problems,
+    6 held-out, 7 set-level packs (3 held-out) — held-out point estimates are fragile.
+    (iii) The method arm is distinct-*answer* pairs; genuine same-answer-different-method switches
+    are excluded, and the same-answer arm sits in between (ensemble 1.51 vs style 0.92, method 2.77),
+    consistent with it being a mixture.
+  - **Consequences for sequencing.** (a) Report the metric as an analysis instrument and as the
+    quantitative anti-GCPO result — both are supported now. (b) Do **not** wire it into GRPO as a
+    dense reward without first hardening it: adversarial style mining (more and held-out rewrite
+    styles as training positives) is the cheap next move, and V6 is now the standing acceptance
+    test to re-run after any such change. (c) The interventional matched-accuracy experiment is
+    unaffected — it does not use the metric as a reward.
+
+## 2026-08-05 — V6b: order-aware / OT / Gromov-Wasserstein kernels (`scripts/23_logdist_seqot.py`) — CHAMFER SURVIVES; one small win
+
+- **Question.** Are the adopted Chamfer matchings leaving signal on the table? Three alternative
+  pairwise kernels over the *same* precomputed banks (claim embeddings, L4-chunk raw + head,
+  mpnet chunks), motivated by trajectory-distance literature: **DTW** (strict temporal alignment —
+  order matters), **Wasserstein/EMD** (mass-conserving point-cloud match — Chamfer's relaxation
+  tightened), **Gromov-Wasserstein** (internal relative geometry only — coordinate-free).
+  $0, CPU-only, ~5 s: full V1/V2 AUC battery + V6 gameability probe + padding attack for all
+  4 banks x 4 kernels plus ensemble variants.
+- **Predictions stated before running:** DTW helps iff method identity lives in step order, but is
+  more exposed to D_restructured (which reorders); OT ≈ Chamfer; GW weak (coordinate invariance
+  solves a problem we don't have — both traces share one encoder — while discarding absolute
+  semantics).
+- **Results (AUC full / held-out problems; R_set with hackable %):**
+
+  | kernel | claim AUC | l4head AUC | claim R_set | l4head R_set |
+  |---|---|---|---|---|
+  | chamfer (adopted) | .946 / .901 | .926 / .791 | 1.42 (70%) | **2.43 (41%)** |
+  | dtw | .940 / .890 | .877 / .696 | **1.56 (64%)** | 1.97 (51%) |
+  | ot | .935 / .893 | .889 / .731 | 1.36 (74%) | 1.80 (56%) |
+  | gw | .652 / .663 | .713 / .584 | 1.12 (89%) | 1.35 (74%) |
+
+  - **GW is near-chance, as predicted** (held-out AUC .46–.66 across banks; R_set ≤ 1.35). Ruled out.
+  - **OT never beats Chamfer** — mass conservation slightly *loosens* discrimination here, and it is
+    less padding-robust (R_pad 3.67 vs Chamfer 7.17 on l4head): b ++ paraphrase shifts half the
+    transported mass, whereas max-matching ignores it.
+  - **DTW at chunk level loses everywhere**, and the padding prediction confirmed: duplication breaks
+    the alignment path, so padding moves l4head:dtw *more* than a style rewrite (d_pad .124 >
+    d_style .080; R_pad 2.71 vs Chamfer's 7.17). Order-awareness at chunk granularity = attack surface.
+  - **The one win: DTW at the *claim* level.** claim:dtw dominates claim:chamfer on gameability
+    (R_set 1.56 vs 1.42; held-out 1.44 vs 1.29) at ~0.01 AUC cost. Claims are LLM-parsed in reading
+    order; a style rewrite preserves claim order, a method switch does not — so order is anti-hack
+    signal *at the right granularity*. Swapping it into the ensemble:
+    **ENS[claim:dtw, l15, l4head:chamfer] = R_set 1.87 [1.50, 2.19] (53% hackable), held-out R 1.51**
+    vs adopted 1.72 (58%) / 1.36. Cost: AUC_D held-out .793 → .765. A real but modest improvement —
+    nowhere near the R_set ≥ 4–5 reward-safety target, so it does not change the V6 verdict or the
+    sequencing: adversarial style mining remains the main hardening path, with V6 (now incl. V6b
+    kernels) as the standing acceptance test.
+- **Interpretation.** The Chamfer max-matching convention is doing real work: it is simultaneously
+  the best discriminator and the most padding-robust, and its known relaxation (one chunk matching
+  many) does not measurably hurt. The trajectory-alignment framing pays off only where the sequence
+  elements are semantically parsed units (claims), not fixed-width token windows.
+- Artifacts: `runs/logdist-testbed/v6b_seqot.json`, `manifest_v6b.json`. Seed 20260805, NBOOT 2000.
+
+## 2026-08-05 — N1 dry run (`scripts/24_n1_dryrun.py`, $0) — observational NULL beyond answer entropy
+
+- **Question.** Before spending $10–20 on the interventional N1: does logical diversity
+  (ENS[cl-dtw] Vendi over each problem's existing k=8 neutral gpt-5.5 pack) predict correctness
+  on the 100 BeyondAIME problems? Uses the newly checkpointed heads (seeded retrain, drift within
+  noise; `head_l15_*.pt` now on disk).
+- **Across problems: diversity is a symptom of being lost, not a cause of success.**
+  vendi ↔ ncorr rho **−0.646**; vendi ↔ pass@8 −0.24. Hard problems produce diverse wrong
+  attempts. Circularity confirmed: vendi ↔ n_unique +0.653. Held within n_unique strata the
+  association stays *negative* (weighted mean −0.23) — including n_unique=1 packs (62/100),
+  where answer entropy is degenerate but logically scattered convergence to one answer predicts
+  that answer being *wrong* — convergent-and-similar reasoning is the good sign observationally.
+- **Within problems (difficulty controlled): the effect exists but is fully absorbed by the
+  cheap statistic.** Over C(8,4) subsets of the 31 mixed-correctness problems, raw within-problem
+  spearman(vendi, cov@4) = +0.256 (74% positive) — but within (problem × subset-answer-entropy)
+  strata it collapses to **+0.029, 95% CI [−0.205, +0.258]** (n=24 strata). Same verdict as V5's
+  deflationary test, now with the full upgraded ensemble: the metric adds no *selection* value
+  over answer entropy on natural rollouts.
+- **Implications for N1 interventional.** (i) The observational route cannot justify the spend —
+  selection on natural packs shows nothing beyond n_unique. (ii) The interventional question
+  (does *inducing* logical diversity at matched accuracy lift pass@k?) is not answered by this —
+  natural diversity is confounded with confusion, which is exactly why matched accuracy matters —
+  but the prior is lowered and the detectable-effect budget is small (CI up to ~+0.26 within
+  strata). (iii) If N1 runs, target the regime where the metric could matter: n_unique=1 packs,
+  where answer entropy carries zero information. Hold the sign-off request until N2/N3 settle
+  whether the metric itself improves.
+- Artifacts: `runs/logdist-testbed/n1_dryrun.json`. Seed 20260805.
+
+## 2026-08-05 — N2: adversarial style mining (`scripts/25_style_mining.py`, $1.12) — MAJOR HARDENING; 2-way ensemble reaches the target point-estimate
+
+- **Design.** 9 new rewrite styles of the same 50 base traces (gpt-4.1-mini, 450 rewrites,
+  448/450 boxed_ok, $0.66; claims extracted for all, 14.1/trace, $0.46). Six TRAIN styles isolate
+  single attack axes (E_reordered, F_renamed, G_formal, H_dialogue, I_answerfirst, J_symbolic);
+  three HELD-OUT styles compound them (K_compound = restructure+rename+casual, L_maxlex = ≤2
+  shared content words/sentence + free reorder, M_narrative). Both heads retrained with the
+  expanded positive cliques (150 → 1125 pairs), seeded; v1 heads kept, so v1-vs-v2 is a clean
+  comparison on identical texts (the task-#1 checkpoint fix is what makes v1 scoreable on v2 texts).
+  Acceptance probe: V6 set-level with an UNSEEN-style pack {D_restructured, K, L, M}.
+- **Component hardening is large.** On unseen-style packs: l15 16% → **9%** hackable
+  (R 6.15 → 11.13), and its order-attack AUC holes close (D .78→.87, E .78→.88, I .68→.86);
+  l4chunk 44% → **32%** (R 2.29 → 3.10). The order-attacking styles (D, E, I) remain the weakest
+  AUC region for every metric — order attacks are the persistent frontier.
+- **The 3-way ensemble barely moves (54% → 52%): the untrained claim:dtw component (64%
+  hackable, no head to harden) now dilutes the hardened heads.** Dropping it:
+  **ENS[l15_v2, l4head_v2] = R_set 4.08 [2.57, 5.82] on unseen styles — 25% hackable, meeting
+  the R_set ≥ 4–5 target on the point estimate** (CI still dips to 2.6; n = 7 packs). AUC cost:
+  per-style held-out AUC .79–.97 (weakest B/E ~.79) vs the 3-way's .74–.99 — the 3-way is better
+  on average but has deeper holes (I .74, D .78); the 2-way's *minimum* is actually higher.
+- **Proposed split of uses.** Measurement instrument (U1): keep the 3-way ENSv2 (best average
+  discrimination). Reward candidate (U2): the 2-way ENSv2 — least hackable — with l15_v2 solo as
+  a dark horse (9% hackable, all per-style AUC ≥ .86, but a single trained head with no ensemble
+  redundancy; its V6-era overfitting appears cured by 9-style training, unverified beyond this
+  testbed).
+- **Caveats.** (i) "Unseen" styles K/L/M come from the same generator (gpt-4.1-mini, same
+  PARA_SYS template) as the train styles — milder than an adaptive attacker; the static-probe
+  lower-bound caveat stands. (ii) n = 7 set-level packs; CIs are wide. (iii) The R ≥ 4–5 bar
+  remains post-hoc.
+- Artifacts: `paraphrases_v2.jsonl`, `claims_v2.jsonl`, `chunk_v2_l4_L18.npz`,
+  `emb_v2_l4_L18.npz`, `claim_v2_embs.npz`, `head_l15_l4_L18_v2.pt`, `head_l4_L18_v2.pt`,
+  `chunk_l4_L18_v2_head.npz`, `n2_eval.json`, `manifest_n2.json`. Total spend $1.12.
