@@ -33,8 +33,12 @@ and ultimately as an RL training signal).
 | F3/E3 | Do lens prompts diversify + pool on SWE-bench localization? | **NULL at Link A** — outputs don't even diversify; Link B effect weak, narrow regime (scripts/20–21) | `f3_diversity_regime_design.md` |
 | V1/V2 | Can the logdist ensemble discriminate method switches? | **PASS** — AUC 0.972 full / 0.929 held-out | `logical_distance_plan.md` |
 | V6 | Is the metric gameable by pure style edits? (`scripts/22`) | **PARTIAL FAIL** — 58% of set-level reward free via style (74% held-out); but all cheap baselines 88–113% hackable (the anti-GCPO result); padding attack fails (Chamfer duplication-invariant, R=5.6) | `logical_distance_plan.md`, meeting note §5 null #6 |
+| N-methods | Is method diversity absent in the GRPO regime, or just mislabeled by the distinct-answer proxy? (`scripts/27`, $1.78, gpt-4.1 judge; self-agreement 92%, style-blindness 91%) | **PROXY BROKEN** — P(diff-method \| diff-ans) = 0.32 (68% of the old "method arm" was same-method slips) and 69% of real method switches share an answer (invisible to the proxy). Method diversity exists but thin: 38% of problems ≥2 methods, 2% ≥4. Proxy-free AUC vs judge labels: l15_v2 zero-shot **0.81** (transfer was much better than the proxy eval implied); in-domain heads worse (trained on corrupted labels); raw_chunk 0.82 (heads' value-add = style-invariance, not method detection). pass@8 0.42 multi-method vs 0.74 single-method. | `logical_distance_plan.md` (2026-08-06) |
+| N-transfer | Do the hardened heads transfer to the GRPO regime (Qwen3-8B non-thinking, MATH L4–5)? (`scripts/26`, $1.70) | **FAIL** — zero-shot AUC 0.63 / R_set≈1.0 (100% hackable); in-domain retrain recovers AUC to only 0.80 and R 1.22 (83% hackable). Deeper: mean n_unique 1.69 and V_method≈1.4 — in this regime distinct answers ≈ same method + arithmetic slip; the method-diversity construct itself is thin. | `logical_distance_plan.md` (2026-08-06) |
 | N2 | Does adversarial style mining harden the metric? (`scripts/25`, $1.12) | **MAJOR component hardening** — 9 new styles (6 train / 3 held-out compound attacks); l15 16%→9% hackable, l4chunk 44%→32% on unseen-style packs; 3-way ensemble stuck at 52% (untrained claim:dtw dilutes) but **2-way ENS[l15_v2, l4head_v2] = R_set 4.08 [2.57,5.82], 25% hackable — meets the ≥4–5 target on the point estimate**. Caveat: unseen styles share the generator; n=7 packs. | `logical_distance_plan.md` (2026-08-05) |
 | N1-dry | Does pack-level logical diversity (ENS[cl-dtw] Vendi, k=8 neutral packs) predict correctness observationally? (`scripts/24`, $0) | **NULL beyond answer entropy** — across problems vendi↔ncorr rho −0.65 (diversity = symptom of being lost); within-problem subset effect +0.26 raw but collapses to +0.03 [−0.21,+0.26] inside answer-entropy strata. No selection value over the cheap statistic on natural rollouts. | `logical_distance_plan.md` (2026-08-05) |
+| N-regime | Which regime contains genuine method diversity — is thinking (mode) or AIME+AMC (hardness) the lever? (`scripts/28`, gpt-5.5 judge $7.24, judge-controlled incl. baseline re-label) | **HARDNESS, NOT THINKING** — think-l45 1.56 methods/prob (thinking polishes one method); **nonthink-hard (AIME+AMC, 2048 tok): 2.32 methods/prob, V_method 2.02, 72% ≥2 methods, 18% ≥4** — with GRPO-friendly headroom (acc 0.37, pass@8 0.54) and the cheapest rollouts. Diversity-as-symptom persists everywhere (p8 multi 0.47 vs single 0.71). Cross-judge 5.5-vs-4.1 agreement 87.7%. | `logical_distance_plan.md` (2026-08-12) |
+| N3b | Does the metric pass V6 gameability in the target regime (nonthink AIME+AMC 2048 tok), with judge-labeled method pairs and in-regime head training? (`scripts/29`, $2.48) | **PASS — U2 gate cleared 2026-08-12.** In-regime 2-way ensemble (l15+l4 heads, judge-diff negatives, 9-style cliques): **R_set 6.46 [5.42,7.68] = 15% hackable** on unseen-style packs (D/K/L/M, pack problems excluded from training) — beats the ≥4–5 bar. Zero-shot v2 heads fail in-regime (1.08–1.91); all untrained baselines 81–101% hackable (anti-GCPO holds). Trade-off: AUC_D 0.70 vs 0.79–0.81 for un-hardened metrics. Caveats: 9 packs, one style generator, static probe. | `logical_distance_plan.md` (2026-08-12 N3b) |
 | V6b | Do alternative kernels (DTW / Wasserstein-OT / Gromov-Wasserstein) over the same banks beat Chamfer? (`scripts/23`, $0) | **CHAMFER SURVIVES** — GW near-chance; OT never beats Chamfer and is less padding-robust; chunk-DTW loses everywhere and padding becomes a working attack against it. One win: **claim-level DTW** (style rewrites preserve claim order, method switches don't) — swapping it into the ensemble lifts R_set 1.72→1.87 (58%→53% hackable, held-out R 1.36→1.51) at ~0.03 AUC_D cost. Verdict unchanged. | `logical_distance_plan.md` (2026-08-05 entry) |
 
 Adopted metric: 3-way ensemble (L2 claim-Chamfer + L1.5 trace head + L4 chunk head), components
@@ -50,12 +54,14 @@ until it survives V6 on unseen styles.
 
 - **U1 (measurement)**: open — use the 3-way ENSv2 (claim:dtw + l15_v2 + l4head_v2; best
   average discrimination).
-- **U2 (RL reward)**: candidate identified after N2 — the **2-way ENS[l15_v2, l4head_v2]**
-  (25% hackable on unseen styles, meets the R_set ≥ 4–5 target on the point estimate; CI dips
-  to 2.6). *Target is post-hoc, not pre-registered — say so wherever it is reported.* Still
-  required before N4: Qwen3-8B transfer validation (the reward must work on the trace
-  distribution GRPO actually produces), and the caveat that "unseen" styles shared the
-  generator stands.
+- **U2 (RL reward)**: **UNBLOCKED 2026-08-12** — N-regime fixed the target regime (Qwen3-8B
+  non-thinking, AIME+AMC, 2048 tok: V_method 2.02, 72% multi-method, acc 0.37), and N3b
+  passed the gameability gate there: in-regime ENSinreg R_set 6.46 [5.42,7.68], 15% hackable
+  on unseen styles (bar was ≥4–5). Reward candidate = ENSinreg 2-way
+  (`runs/regime-probe/head_l15_inreg.pt` + `head_l4_inreg.pt`, scaled by judge-diff-pair sd,
+  no mean-centering; do NOT add untrained claim:dtw — it dilutes to 65% hackable). N4 may
+  proceed. Residual risks for N4: static-probe lower bound (RL will search styles the probe
+  didn't), single style generator, AUC_D 0.70 discrimination trade-off.
 
 ## 4. Experiments to come
 
@@ -63,8 +69,9 @@ until it survives V6 on unseen styles.
 |---|---|---|---|---|---|
 | N1 | Interventional matched-accuracy test: does *logical* diversity of a rollout pack predict pass@k where surface diversity didn't? Sample into the mid band. | U1 | ~$10–20 (needs cost sign-off, >$10 rule) | prior lowered by N1-dry | Doesn't use the metric as a reward. N1-dry (2026-08-05): observational selection value is NULL beyond answer entropy; if run, target n_unique=1 packs where answer entropy is degenerate. Hold sign-off until after N2/N3. |
 | N2 | Adversarial style mining: more + deliberately held-out rewrite styles as training positives; retrain heads. | U2 hardening | $1.12 actual | **done 2026-08-05** | See §2. Follow-up frontier: order attacks (D/E/I remain the weakest AUC region for every metric); truly independent attack generator (different model/template) for the next round. |
-| N3 | Re-run V6 as acceptance test after N2. | U2 gate | $0 (existing pairs + one GPU encode pass) | blocked on N2 | Pass = R_set ≥ 4–5 on unseen styles. Run the full V6b kernel grid (`scripts/23`), not just the adopted ensemble. |
-| N4 | Wire ensemble into diversity-GRPO as dense reward. | U2 | GPU time | blocked on N3 | Do **not** start before N3 passes — predicted failure mode is style drift (F0a/F2 inert variation re-entering through the reward). |
+| N3 | Re-run V6 as acceptance test after N2. | U2 gate | $0 (existing pairs + one GPU encode pass) | **passed in source domain 2026-08-05** (2-way ENS R_set 4.08, 25% hackable — meets ≥4–5 target), but **superseded by N-transfer FAIL** in the old GRPO regime | New gate for U2 is passing V6 **in the target regime**, which N-regime has now fixed as nonthink AIME+AMC 2048 tok — see N3b. |
+| N3b | In-target-regime gameability with judge labels. | U2 gate | $2.48 actual | **PASSED 2026-08-12** — see §2 | R_set 6.46, 15% hackable; moved to §2. |
+| N4 | Wire ENSinreg into diversity-GRPO as dense reward, in the target regime (Qwen3-8B non-thinking, AIME+AMC, 2048 tok). | U2 | GPU time | **unblocked — next up** | Use `scripts/10_diversity_grpo.py` + ENSinreg heads (see §3). Monitor style drift online: RL searches styles the static probe didn't — track V_style-proxy and judge-audit samples during training. Success = method count/V_method rises at matched accuracy; failure mode = reward climbs while judge-audited method count doesn't (style drift, the F0a/F2 signature). |
 
 ## 5. Known gotchas (cost-saving, do not relearn)
 
