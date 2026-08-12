@@ -431,3 +431,70 @@ Generated:
 - Artifacts: `paraphrases_v2.jsonl`, `claims_v2.jsonl`, `chunk_v2_l4_L18.npz`,
   `emb_v2_l4_L18.npz`, `claim_v2_embs.npz`, `head_l15_l4_L18_v2.pt`, `head_l4_L18_v2.pt`,
   `chunk_l4_L18_v2_head.npz`, `n2_eval.json`, `manifest_n2.json`. Total spend $1.12.
+
+## 2026-08-06 — Qwen transfer testbed (`scripts/26_qwen_transfer.py`, $1.70) — TRANSFER FAILS; the construct itself is weak in the GRPO regime
+
+- **Setup.** New testbed `runs/logdist-qwen/`: Qwen3-8B **non-thinking**, MATH levels 4–5,
+  1024-token cap, temp 0.7 — the F1/N4 GRPO regime. 100 problems × k=8 ($0, GPU 3), acc 0.484
+  (good mid-band). 7 eval-only styles (A–D + K/L/M compound attacks, $0.58; 73% boxed_ok —
+  truncated/boxless base traces add positive-pair noise), claims for the 50-problem subset ($0.57).
+- **Regime fact #1: answer diversity collapses.** Mean n_unique 1.69 (vs the rich spread on
+  BeyondAIME); only 22/100 problems have any distinct-answer pair, 7 have ≥4. The environment a
+  diversity reward would operate in is already convergence-dominated.
+- **Zero-shot transfer of the v2 heads FAILS.** Overall AUC: 2-way ensemble 0.630, l4head_v2
+  0.556, l15_v2 0.707 (A_concise and D_restructured at/below chance). Set-level: **every
+  ensemble at R_set ≈ 1.0 — 100% hackable** — a pack of 4 rewordings scores as diverse as 4
+  distinct-answer solutions. N4 with these heads would have been style-drift by construction.
+- **In-domain retraining (A/B/C cliques, 25 train problems, pack problems held out) only
+  partially recovers.** AUC 0.80 (l4_in) / 0.78 (ENS-in) — but R_set 1.22 [0.80, 1.71],
+  **~83% hackable**, CI includes 1. Data poverty is part of it (55 neg pairs, noisy positives),
+  but the sharper diagnosis is **regime fact #2: V_method ≈ 1.4 even by the in-domain metric**
+  (vs ~3.2 on BeyondAIME) — on MATH L4–5 non-thinking, distinct answers are mostly the *same
+  method with an arithmetic slip*, so the distinct-answer proxy for "method switch" is largely
+  degenerate here. The ground truth, not just the metric, is thin.
+- **Verdict for the pipeline.** (i) Metric validity is **regime-bound**: validated on gpt-5.5
+  BeyondAIME traces; neither transfers zero-shot nor trivially retrains onto the F1 regime.
+  (ii) **N4 stays blocked** — and the blocker is now deeper than metric hackability: in the
+  cheap GRPO regime there is little genuine method diversity to reward, consistent with N1-dry
+  ("diversity is a symptom of being lost") and the F0a/F2 inert-variation series. (iii) Paths
+  forward, in rough order of value: (a) method-labeled ground truth (LLM-judged method
+  annotation instead of the distinct-answer proxy) to check whether genuine method switches
+  exist but are invisible to answer-based pairing; (b) a bigger in-domain testbed (more
+  problems/pairs, thinking-mode traces later); (c) reconsider the reward-target: rewarding
+  logical diversity may only make sense in regimes where methods actually diverge.
+- Artifacts: `runs/logdist-qwen/` (traces, pairs, labels, paraphrases, claims, banks,
+  `head_*_indom.pt`, `transfer_eval.json`, manifest). ~$0.55 additionally lost to a
+  crash-before-write in the first paraphrase run (fixed: raw output now persisted pre-grading).
+
+## 2026-08-06 — Method-labeled ground truth (`scripts/27_method_labels.py`, $1.78, gpt-4.1 judge) — PROXY WAS BROKEN, NOT (MOSTLY) THE METRIC
+
+- **Judge validity.** Self-agreement on pair-level same/diff-method: 92% (20-problem repeat at
+  temp 0.7). Hidden paraphrase controls (D_restructured + L_maxlex appended to the trace set):
+  91% assigned to their base's cluster — the judge is largely style-blind. Trustworthy enough.
+- **Construct presence: method diversity exists but is thin.** Mean 1.47 methods/problem;
+  38% of problems have ≥2 methods; only 2% have ≥4. So a k=4 method-diverse pack essentially
+  does not occur naturally in this regime — set-level Vendi probes built from distinct answers
+  were measuring noise. A GRPO reward here could meaningfully push 1→2 methods, not 4-way packs.
+- **The distinct-answer proxy fails in BOTH directions.**
+  P(diff-method | diff-answer) = **0.32** — 68% of "method switch" pairs in the old negative
+  arm are the same method with arithmetic slips. And 364/531 ≈ **69% of genuine method switches
+  produce the same answer** — invisible to answer-based pairing. Every Qwen-testbed number
+  computed against the proxy (the transfer AUCs, the in-domain retrain) had ~2/3-corrupted labels.
+- **Metric vs judge labels (proxy-free AUC, same-method = 0 / diff-method = 1):**
+  l15_v2 zero-shot **0.810**, raw_chunk 0.818, l4_v2 0.738; the in-domain heads are WORSE
+  (0.66–0.76) — they were trained against the corrupted proxy. So the "transfer failure" was
+  substantially the proxy's failure: the v2 trace head transfers far better than the
+  answer-proxy eval suggested. Note the deflationary echo: raw chunk embeddings match the
+  trained head on *method discrimination* here — the heads' real value-add is style-invariance
+  (raw_chunk is 88–97% style-hackable), not method detection per se.
+- **Correctness.** pass@8 = 0.42 on ≥2-method problems vs 0.74 on single-method — the
+  familiar "method exploration is a symptom of difficulty" signature, consistent with N1-dry.
+- **Consequences.** (a) Retire the distinct-answer proxy in this regime; judge labels are the
+  ground truth for any further Qwen-side training/eval (and cheap: ~$1.8/100 problems).
+  (b) Redo the gameability probe in-regime with judge-labeled method pairs vs paraphrase pairs
+  (pairwise R; set-level k=4 packs don't exist here — 2% incidence). (c) The reward question
+  sharpens to: can a reward push convergence-dominated sampling from 1 method toward 2+ at
+  matched accuracy? That is the N4-relevant experiment, and l15_v2 (zero-shot!) is currently
+  the best candidate signal (judge-AUC 0.81, style-blind by construction).
+- Artifacts: `runs/logdist-qwen/method_labels.jsonl`, `method_labels_summary.json`,
+  `manifest_methods.json`.

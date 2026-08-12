@@ -44,6 +44,13 @@ STYLES7 = dict(list(s1.STYLES.items()) + [(k, s5.V2_STYLES[k]) for k in s5.HELDO
 PACK_STYLES = s5.HELDOUT_PACK  # {D, K, L, M} -- all unseen by the v2 heads
 
 
+def boxed_or_none(text):
+    try:
+        return extract_boxed(text or "")
+    except ValueError:
+        return None
+
+
 def load_problems():
     from datasets import load_dataset
     test_problems = {r["problem"] for r in load_dataset("HuggingFaceH4/MATH-500", split="test")}
@@ -58,7 +65,7 @@ def load_problems():
             lvl = "".join(ch for ch in str(r.get("level", "")) if ch.isdigit())
             if lvl not in ("4", "5") or r["problem"] in test_problems:
                 continue
-            gold = extract_boxed(r["solution"])
+            gold = boxed_or_none(r["solution"])
             if gold is None:
                 continue
             items.append({"problem": r["problem"], "gold": gold, "level": lvl})
@@ -95,7 +102,7 @@ def generate():
             print(f"gen {i}/{len(jobs)}  {time.time() - t0:.0f}s", flush=True)
     rows = []
     for (q, s), text in sorted(texts.items()):
-        ext = extract_boxed(text)
+        ext = boxed_or_none(text)
         ok = bool(run_with_timeout_signal(grade_answer, args=(ext, items[q]["gold"]),
                                           timeout_seconds=2)) if ext else False
         rows.append({"qidx": q, "samp": s, "text": text, "extracted": ext,
@@ -132,8 +139,11 @@ def pick_bases(rows):
     for r in rows:
         byq[r["qidx"]].append(r)
     rng = random.Random(SEED)
+    labels = {int(k): v for k, v in json.load(open(QT / "problem_labels.json")).items()}
     qs = sorted(byq)
     rng.shuffle(qs)
+    # set-level packs need >=4 distinct answers AND paraphrases -- force those problems in
+    qs.sort(key=lambda q: -(labels[q]["n_unique"] >= 4))
     picked = []
     for q in qs[:NPARA]:
         pool = [r for r in byq[q] if r["correct"]] or \
@@ -164,7 +174,7 @@ def paraphrase(args):
                 u = resp.usage
                 text = resp.choices[0].message.content or ""
                 return {"qidx": r["qidx"], "samp": r["samp"], "style": sk, "text": text,
-                        "orig_extracted": r["extracted"], "para_extracted": extract_boxed(text),
+                        "orig_extracted": r["extracted"], "para_extracted": boxed_or_none(text),
                         "prompt_tok": u.prompt_tokens, "compl_tok": u.completion_tokens}
             except Exception:
                 if attempt == 3:
@@ -173,8 +183,14 @@ def paraphrase(args):
 
     with ThreadPoolExecutor(8) as pool:
         out = list(pool.map(one, jobs))
+    with open(QT / "paraphrases_raw.jsonl", "w") as f:  # persist BEFORE grading can crash
+        for r in out:
+            f.write(json.dumps(r) + "\n")
     for r in out:  # signal-based grading -> main thread only
-        r["boxed_ok"] = int(s1.boxed_match(r["text"], r["orig_extracted"]))
+        try:
+            r["boxed_ok"] = int(s1.boxed_match(r["text"], r["orig_extracted"]))
+        except ValueError:
+            r["boxed_ok"] = 0
     with open(QT / "paraphrases.jsonl", "w") as f:
         for r in out:
             f.write(json.dumps(r) + "\n")
@@ -371,9 +387,157 @@ def evaluate():
     (QT / "transfer_eval.json").write_text(json.dumps(res, indent=1))
 
 
+def qsplit():
+    # 25/25 split of the para problems; all >=4-unique (pack) problems forced into TEST so
+    # the set-level probe stays clean of head training
+    pa = [json.loads(l) for l in open(QT / "paraphrases.jsonl")]
+    labels = {int(k): v for k, v in json.load(open(QT / "problem_labels.json")).items()}
+    pqs = sorted({r["qidx"] for r in pa})
+    packq = [q for q in pqs if labels[q]["n_unique"] >= 4]
+    rest = [q for q in pqs if q not in packq]
+    random.Random(SEED).shuffle(rest)
+    test_q = set(packq) | set(rest[:25 - len(packq)])
+    return pa, set(pqs) - test_q, test_q
+
+
+def retrain():
+    # in-domain heads: train positives = {base, A, B, C} cliques on train problems only;
+    # D/K/L/M styles and all pack problems stay unseen
+    import torch
+    from sklearn.metrics import roc_auc_score
+    pa, train_q, test_q = qsplit()
+    base = {r["qidx"]: r["samp"] for r in pa}
+    negs = [json.loads(l) for l in open(QT / "pairs_distinct_answer.jsonl")]
+    ids, _, _ = qids_texts()
+    idx = {s: i for i, s in enumerate(ids)}
+    ET = np.load(QT / "emb_l4_L18.npz")["l4_L18"]
+
+    def cliques(qs):
+        pos = []
+        for q in qs:
+            mem = [f"n{q}_{base[q]}"] + [f"p{q}_{st}" for st in
+                                         ("A_concise", "B_pedagogical", "C_casual")]
+            pos += [(a, b) for i, a in enumerate(mem) for b in mem[i + 1:]]
+        return pos
+
+    torch.manual_seed(SEED)
+    E = torch.tensor(ET).float().cuda()
+    pos = [(idx[a], idx[b]) for a, b in cliques(train_q)]
+    neg_tr = [(idx[f"n{p['qidx']}_{p['samp_i']}"], idx[f"n{p['qidx']}_{p['samp_j']}"])
+              for p in negs if p["qidx"] in train_q]
+    print(f"in-domain l15: pos={len(pos)} neg={len(neg_tr)} (train_q={len(train_q)})")
+    W = torch.nn.Linear(E.shape[1], 256, bias=False).cuda()
+    opt = torch.optim.Adam(W.parameters(), lr=1e-3, weight_decay=1e-4)
+    pi = torch.tensor(pos).cuda(); ni = torch.tensor(neg_tr).cuda()
+    for step in range(400):
+        f = torch.nn.functional.normalize(W(E), dim=-1)
+        cp = (f[pi[:, 0]] * f[pi[:, 1]]).sum(-1)
+        cn = (f[ni[:, 0]] * f[ni[:, 1]]).sum(-1)
+        loss = (1 - cp).mean() + torch.relu(cn - 0.4).mean()
+        opt.zero_grad(); loss.backward(); opt.step()
+    with torch.no_grad():
+        F = torch.nn.functional.normalize(W(E), dim=-1).cpu().numpy()
+    np.savez(QT / "emb_l15_indom.npz", l15=F)
+    torch.save(W.state_dict(), QT / "head_l15_indom.pt")
+
+    z = np.load(QT / "chunk_l4_L18.npz")
+    offsets = {k: tuple(v) for k, v in json.loads(str(z["offsets"])).items()}
+    EC = torch.tensor(z["E"]).float().cuda()
+    torch.manual_seed(SEED)
+    W = torch.nn.Linear(EC.shape[1], 256, bias=False).cuda()
+    opt = torch.optim.Adam(W.parameters(), lr=1e-3, weight_decay=1e-4)
+    posn = cliques(train_q)
+    rng = np.random.default_rng(SEED)
+
+    def cham_sim(F, a, b):
+        (a0, a1), (b0, b1) = offsets[a], offsets[b]
+        S = F[a0:a1] @ F[b0:b1].T
+        return 0.5 * (S.max(1).values.mean() + S.max(0).values.mean())
+
+    negn = [(f"n{p['qidx']}_{p['samp_i']}", f"n{p['qidx']}_{p['samp_j']}")
+            for p in negs if p["qidx"] in train_q]
+    for step in range(300):
+        F = torch.nn.functional.normalize(W(EC), dim=-1)
+        bp = [posn[i] for i in rng.choice(len(posn), 48)]
+        bn = [negn[i] for i in rng.choice(len(negn), min(48, len(negn)))]
+        sp = torch.stack([cham_sim(F, *p) for p in bp])
+        sn = torch.stack([cham_sim(F, *p) for p in bn])
+        loss = (1 - sp).mean() + torch.relu(sn - 0.4).mean()
+        opt.zero_grad(); loss.backward(); opt.step()
+    with torch.no_grad():
+        F = torch.nn.functional.normalize(W(EC), dim=-1).cpu().numpy()
+    np.savez(QT / "chunk_l4_indom_head.npz", E=F, offsets=json.dumps(
+        {k: list(v) for k, v in offsets.items()}))
+    torch.save(W.state_dict(), QT / "head_l4_indom.pt")
+    print(f"in-domain l4chunk trained ({len(posn)} pos cliques)")
+
+
+def eval_indom():
+    from sklearn.metrics import roc_auc_score
+    pa, train_q, test_q = qsplit()
+    base = {r["qidx"]: r["samp"] for r in pa}
+    negs = [json.loads(l) for l in open(QT / "pairs_distinct_answer.jsonl")]
+    ids, _, _ = qids_texts()
+    idx = {s: i for i, s in enumerate(ids)}
+    F15 = np.load(QT / "emb_l15_indom.npz")["l15"]
+    z = np.load(QT / "chunk_l4_indom_head.npz")
+    FC, coff = z["E"], {k: tuple(v) for k, v in json.loads(str(z["offsets"])).items()}
+    comps = {
+        "l15_in": s6.memo(lambda a, b: float(1 - F15[idx[a]] @ F15[idx[b]])),
+        "l4_in": s6.memo(lambda a, b: s6.d_chamfer(FC[slice(*coff[a])], FC[slice(*coff[b])])),
+    }
+    npair = [(f"n{p['qidx']}_{p['samp_i']}", f"n{p['qidx']}_{p['samp_j']}") for p in negs]
+    zs = {k: float(np.std([comps[k](a, b) for a, b in npair])) for k in comps}
+    m = dict(comps)
+    m["ENS-in"] = s6.memo(lambda a, b: float(np.mean([comps[k](a, b) / zs[k] for k in zs])))
+
+    neg_ho = [(a, b) for (a, b), p in zip(npair, negs) if p["qidx"] in test_q]
+    styles = list(STYLES7)
+    print(f"{'':10s}" + "".join(f"{st[:6]:>8s}" for st in styles)
+          + "     ALL   (held-out-problem AUC, in-domain heads)")
+    for mn, f in m.items():
+        dn = [f(a, b) for a, b in neg_ho]
+        row, allpos = [], []
+        for st in styles:
+            v = [f(f"n{q}_{base[q]}", f"p{q}_{st}") for q in sorted(test_q)]
+            allpos += v
+            row.append(roc_auc_score([0] * len(v) + [1] * len(dn), v + dn))
+        overall = roc_auc_score([0] * len(allpos) + [1] * len(dn), allpos + dn)
+        print(f"{mn:10s}" + "".join(f"{x:8.3f}" for x in row) + f"{overall:8.3f}")
+
+    labels = {int(k): v for k, v in json.load(open(QT / "problem_labels.json")).items()}
+    packs = {}
+    for q in sorted(base):
+        if labels[q]["n_unique"] < 4:
+            continue
+        by_a = collections.defaultdict(list)
+        for s in range(K):
+            by_a[labels[q]["answer_class"][s]].append(s)
+        reps = sorted(v[0] for v in by_a.values())
+        packs[q] = ([f"p{q}_{st}" for st in PACK_STYLES], [f"n{q}_{s}" for s in reps[:4]])
+    print(f"\nset-level, {len(packs)} packs (unseen styles D/K/L/M; pack problems unseen in training):")
+    rng = np.random.default_rng(20260806)
+    for mn, f in m.items():
+        tau = abs(np.mean([f(a, b) for a, b in npair])) or 1.0
+        vs, vm = [], []
+        for q in sorted(packs):
+            for pack, acc in zip(packs[q], (vs, vm)):
+                D = np.zeros((4, 4))
+                for i, j in combinations(range(4), 2):
+                    D[i, j] = D[j, i] = f(pack[i], pack[j])
+                acc.append(s6.vendi(D, tau))
+        vs, vm = np.array(vs), np.array(vm)
+        r = (vm.mean() - 1) / max(vs.mean() - 1, 1e-9)
+        bs = [(vm[i].mean() - 1) / max(vs[i].mean() - 1, 1e-9)
+              for i in rng.integers(0, len(vs), (2000, len(vs)))]
+        lo, hi = np.percentile(bs, [2.5, 97.5])
+        print(f"{mn:10s}  V_style {vs.mean():.3f}  V_meth {vm.mean():.3f}  "
+              f"R {r:5.2f} [{lo:4.2f},{hi:4.2f}]  hack {100 / max(r, 1e-9):4.0f}%")
+
+
 def main():
     ap = argparse.ArgumentParser()
-    for f in ("generate", "paraphrase", "claims", "encode", "eval"):
+    for f in ("generate", "paraphrase", "claims", "encode", "eval", "retrain", "eval-indom"):
         ap.add_argument(f"--{f}", action="store_true")
     ap.add_argument("--model", default="gpt-4.1-mini")
     a = ap.parse_args()
@@ -393,6 +557,10 @@ def main():
         encode()
     if a.eval:
         evaluate()
+    if a.retrain:
+        retrain()
+    if getattr(a, "eval_indom"):
+        eval_indom()
 
 
 if __name__ == "__main__":
