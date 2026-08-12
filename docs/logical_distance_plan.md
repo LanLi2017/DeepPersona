@@ -498,3 +498,80 @@ Generated:
   the best candidate signal (judge-AUC 0.81, style-blind by construction).
 - Artifacts: `runs/logdist-qwen/method_labels.jsonl`, `method_labels_summary.json`,
   `manifest_methods.json`.
+
+## 2026-08-12 — Regime probe (`scripts/28_regime_probe.py`, judge $7.24) — HARDNESS, NOT THINKING, BUYS METHOD DIVERSITY; nonthink-hard is the N4 candidate regime
+
+**Question.** N-methods left U2 blocked on a regime decision: the F1/GRPO regime (Qwen3-8B
+non-thinking, MATH L4–5, 1024 tok) has too little genuine method diversity to reward. Which
+candidate regime actually contains the construct? Candidates isolate **mode** (thinking) vs
+**hardness** (AIME+AMC), all Qwen3-8B rev b968826, k=8, temp 0.7 / top_p 0.95, seed 0, 50
+problems each. Judge = scripts/27 method-clustering prompt on **gpt-5.5-2026-04-23**
+(user-approved ≤$25; low reasoning effort), incl. a same-judge re-label of the logdist-qwen
+baseline so the table is judge-controlled.
+
+| regime | acc | pass@8 | trunc | methods/prob | V_method | ≥2m | ≥4m | p8 multi vs single | self-agree |
+|---|---|---|---|---|---|---|---|---|---|
+| nonthink-l45 (baseline) | 0.455 | 0.58 | – | 1.66 | 1.53 | 32% | 8% | 0.31 / 0.71 | 98% |
+| think-l45 (12288 tok) | 0.750 | 0.88 | 16% | 1.56 | 1.41 | 34% | 4% | 0.82 / 0.91 | 99% |
+| think-hard (16384 tok) | 0.680 | 0.86 | 27% | 1.88 | 1.66 | 52% | 10% | 0.77 / 0.96 | 93% |
+| **nonthink-hard (2048 tok)** | 0.372 | 0.54 | 0% | **2.32** | **2.02** | **72%** | **18%** | 0.47 / 0.71 | 91% |
+
+- **Thinking is NOT the lever.** Same problems, mode flipped: methods/prob 1.66→1.56. Thinking
+  mode converges on one canonical method and polishes it (rumination = within-method
+  self-checking, not method exploration).
+- **Hardness IS the lever.** AIME+AMC non-thinking: 2.32 methods/prob, 72% of problems ≥2
+  methods, 18% ≥4 (vs 8%/4%/10% elsewhere) — enough incidence for set-level (k=4 pack) V6
+  probes, which were impossible in the old regime (2%).
+- **The winning regime is also the best GRPO regime and the cheapest**: acc 0.37 / pass@8 0.54
+  (real headroom, nonzero reward signal), 2048-token rollouts, zero truncation. Same
+  regime family as F1 — only the problem source changes.
+- **Diversity-as-symptom persists in every regime** (multi-method problems have lower pass@8
+  throughout, e.g. 0.47 vs 0.71 in-regime). Same observational confound as N1-dry — hardness
+  drives both. The N1 interventional design remains the only way to test the causal claim.
+- **Judge robustness.** gpt-5.5 vs gpt-4.1 on identical baseline traces: 87.7% pairwise
+  agreement; 5.5 finds slightly more methods (1.66 vs 1.38). N-methods conclusions stand.
+- **Caveats.** Truncated think-traces judged from thinking-tail (16–27%); judge reads the
+  post-</think> writeup; 50 problems/regime; AIME+AMC mix ~half AMC (acc 0.37 is mostly AMC).
+- **Consequence.** Target regime for U2 = **Qwen3-8B non-thinking, AIME+AMC, 2048 tok**.
+  Next: N3-in-target-regime — judge-labeled method pairs + paraphrase pairs there, retrain
+  heads on judge labels (never the answer proxy), run the V6/V6b gameability grid.
+- Artifacts: `runs/regime-probe/` (traces_*.jsonl, method_labels_*.jsonl, summary.json);
+  generation via vLLM 0.27.1 in `.venv-vllm` (py3.12; HF generate OOMs at 8–16k tok).
+
+## 2026-08-12 — N3b: in-target-regime gameability (`scripts/29_n3b_ingame.py`, $2.48) — **GATE PASSED**: R_set 6.46, 15% hackable; U2 unblocks
+
+**Setup.** Target regime traces (`runs/regime-probe/traces_nonthink-hard.jsonl`, 50×8) +
+650 paraphrases (13 styles A–M) + claims. Method arm = **gpt-5.5 judge labels everywhere**
+(eval pairs, set packs, head-training negatives) — the distinct-answer proxy is retired.
+In-regime heads: positives = style cliques {base + A,B,C,E–J} on 25 train problems;
+negatives = 177 judge diff-method pairs; **D/K/L/M and all 9 pack problems (≥4 judge
+methods) fully unseen**. Eval on the 25 test problems.
+
+Set-level (method pack = 4 distinct-judge-method traces; style pack = base ++ D/K/L/M):
+
+| metric | V_style | V_meth | R_set [95% CI] | hackable |
+|---|---|---|---|---|
+| **ENSinreg (l15+l4, in-regime)** | 1.23 | 2.50 | **6.46 [5.42,7.68]** | **15%** |
+| l15_inreg / l4_inreg alone | 1.19 / 1.26 | 2.21 / 2.61 | 6.40 / 6.26 | 16% |
+| l15_v2 zero-shot | 1.86 | 2.65 | 1.91 [1.54,2.51] | 52% |
+| ENSv2-2way zero-shot | 2.95 | 3.11 | 1.08 | 93% |
+| claim:dtw / raw_chunk | 2.82 / 3.00 | 3.25 / 3.29 | 1.24 / 1.14 | 81% / 88% |
+
+- **First full pass of the pre-registered R_set ≥ 4–5 bar on unseen styles** — and in the
+  regime N4 would actually train in. The anti-GCPO contrast survives in-regime: every
+  untrained metric is 81–101% style-hackable (l4head_v2 zero-shot at 101%: style buys
+  MORE reward than a method switch).
+- **In-regime training is what does it** (zero-shot v2 heads fail here, confirming
+  N-transfer); judge-labeled negatives + 9-style cliques on 2048-tok traces give
+  V_style ≈ 1.2 while keeping V_meth ≈ 2.5.
+- **Trade-off to carry into N4:** in-regime heads pay for style-invariance with
+  discrimination — AUC_D 0.70 (ENSinreg) vs 0.79 (l15_v2) / 0.81 (raw_chunk). Per-style
+  AUC_G never drops below 0.62 for in-regime heads (no winning style attack), while
+  zero-shot l4head_v2 has styles at 0.31–0.45 (style >> method).
+- **Adding untrained claim:dtw dilutes** (ENSinreg3 → 1.54, 65%), same as N2. Reward
+  candidate = **ENSinreg 2-way** (`head_l15_inreg.pt` + `head_l4_inreg.pt`, scaled by
+  judge-diff-pair sd, no mean-centering).
+- Caveats: 9 packs; styles share one generator (gpt-4.1-mini); static probe ⇒ hackability
+  is a lower bound; paraphrase boxed-answer preservation 571/650.
+- Artifacts: `runs/regime-probe/` (paraphrases.jsonl, claims.jsonl, emb_*/chunk_* npz,
+  head_l15_inreg.pt, head_l4_inreg.pt, n3b_eval.json, manifest_n3b.json).
