@@ -17,6 +17,7 @@ import argparse
 import datetime
 import json
 import os
+import random
 import re
 import subprocess
 import threading
@@ -42,6 +43,7 @@ MODELS = {
     "llama70b": "meta.llama3-3-70b-instruct-v1:0",  # access-check fallback, not in the design's model roster
     "mistrallarge3": "mistral.mistral-large-3-675b-instruct",  # ON_DEMAND, 64000 max_tokens OK, confirmed 2026-09-02
     "kimik2thinking": "moonshot.kimi-k2-thinking",  # ON_DEMAND, 64000 max_tokens OK; also in us-west-2 (scripts/22 legacy)
+    "haiku45": "us.anthropic.claude-haiku-4-5-20251001-v1:0",  # INFERENCE_PROFILE, 64000 OK, no verified pricing (Anthropic absent from Pricing API here)
 }
 # NOTE (2026-09-02): gpt56sol/gpt56terra/claudeopus5/claudesonnet5 all still return
 # AccessDeniedException via EITHER calling convention (bare ON_DEMAND id or the us.* inference
@@ -93,6 +95,62 @@ def make_prompt(problem, persona_cond, slot):
     return PROMPT_TMPL.format(persona=persona, problem=problem)
 
 
+# Sampling-method comparison (2026-09-11): persona-prompting pre-imposes an identity on the model
+# before it even sees the problem, which may just constrain it rather than diversify it (esp. an
+# axis persona mismatched to the problem's actual domain). These three alternatives try to induce
+# genuine method diversity without fixing the model into an external frame up front.
+SAMPLING_METHODS = ["plain", "randtemp", "selfdiverse", "branch"]
+
+SELFDIVERSE_INSTRUCTION = (
+    "Solve the problem again using a genuinely different method from the one above -- different "
+    "key idea, not just different wording. Do not reuse the same formulas, case structure, or "
+    "overall approach. Show your complete reasoning, then state your final answer as \\boxed{answer}."
+)
+
+
+def stitch_continuation(prefix, response_text):
+    """Bedrock Converse's assistant-prefill continuation behavior is provider-specific: Anthropic
+    models continue purely from the cut point (response excludes the prefix); Qwen echoes the
+    given prefix back verbatim before continuing. Detect which happened rather than hardcoding
+    per-model, so this doesn't silently break if the vendor changes behavior."""
+    check_len = min(40, len(prefix))
+    if check_len and prefix[-check_len:] in response_text[:check_len + 40]:
+        return response_text  # echoed the prefix -- response is already the full text
+    return prefix + response_text
+
+
+def branch_point(text):
+    """Cut a prior solution at a random point in its middle third, snapped to a sentence
+    boundary, so the resampled continuation diverges partway through rather than at the very
+    start (~persona-like) or the very end (~no real divergence)."""
+    lo, hi = int(len(text) * 0.3), int(len(text) * 0.7)
+    if hi <= lo:
+        return text
+    cut = random.randint(lo, hi)
+    boundary = text.rfind(". ", lo, cut + 1)
+    return text[:boundary + 1] if boundary != -1 else text[:cut]
+
+
+def build_messages(persona_cond, slot, sampling_method, prob, prior_recs):
+    """Returns the Converse `messages` list for this draw."""
+    base_prompt = make_prompt(prob["problem"], persona_cond, slot)
+    if sampling_method in ("plain", "randtemp") or slot == 0 or not prior_recs:
+        return [{"role": "user", "content": [{"text": base_prompt}]}]
+    if sampling_method == "selfdiverse":
+        return [
+            {"role": "user", "content": [{"text": base_prompt}]},
+            {"role": "assistant", "content": [{"text": prior_recs[-1]["generation"]}]},
+            {"role": "user", "content": [{"text": SELFDIVERSE_INSTRUCTION}]},
+        ]
+    if sampling_method == "branch":
+        prefix = branch_point(prior_recs[-1]["generation"])
+        return [
+            {"role": "user", "content": [{"text": base_prompt}]},
+            {"role": "assistant", "content": [{"text": prefix}]},
+        ]
+    raise ValueError(sampling_method)
+
+
 def load_aime2024():
     ds = load_dataset("AI-MO/aimo-validation-aime", split="train")
     rows = [r for r in ds if "2024" in r["url"]]
@@ -111,18 +169,22 @@ def extract_answer(text):
     return int(nums[-1]) if nums else None
 
 
-def call_bedrock(client, model_id, prompt, max_tokens, temperature=1.0, retries=4):
+def call_bedrock(client, model_id, messages, max_tokens, temperature=1.0, retries=4):
     for attempt in range(retries):
         try:
             resp = client.converse_stream(
                 modelId=model_id,
-                messages=[{"role": "user", "content": [{"text": prompt}]}],
+                messages=messages,
                 inferenceConfig={"maxTokens": max_tokens, "temperature": temperature},
             )
             break
         except (client.exceptions.ThrottlingException,
                 client.exceptions.InternalServerException,
-                client.exceptions.ModelTimeoutException) as e:
+                client.exceptions.ModelTimeoutException,
+                client.exceptions.ValidationException) as e:
+            # ValidationException is usually permanent (bad request), but observed 2026-09-11 to
+            # be intermittent for Claude assistant-prefill continuations (the "branch" sampling
+            # method) -- retrying the identical request succeeded on manual reproduction.
             if attempt == retries - 1:
                 raise
             time.sleep(2 ** attempt * 3)
@@ -147,7 +209,8 @@ def call_bedrock(client, model_id, prompt, max_tokens, temperature=1.0, retries=
     return "\n\n".join(parts), in_tok, out_tok
 
 
-def run_item(client, model_key, model_id, persona_cond, temperature, prob, n_max, max_tokens, f, write_lock):
+def run_item(client, model_key, model_id, persona_cond, temperature, sampling_method,
+            prob, n_max, max_tokens, f, write_lock):
     """Draw rollouts one at a time until both a correct and incorrect are seen, capped at n_max.
 
     Each draw is written to disk immediately (not buffered until the item finishes) -- a paid-for
@@ -156,22 +219,28 @@ def run_item(client, model_key, model_id, persona_cond, temperature, prob, n_max
     """
     recs = []
     seen_correct = seen_incorrect = False
-    full_condition = f"{model_key}_{persona_cond}_t{temperature}"
+    full_condition = f"{model_key}_{persona_cond}_t{temperature}_{sampling_method}"
     while len(recs) < n_max and not (seen_correct and seen_incorrect):
         slot = len(recs)
-        prompt = make_prompt(prob["problem"], persona_cond, slot)
+        messages = build_messages(persona_cond, slot, sampling_method, prob, recs)
+        draw_temp = random.uniform(0.6, 1.0) if sampling_method == "randtemp" else temperature
         try:
-            generation, in_tok, out_tok = call_bedrock(client, model_id, prompt, max_tokens, temperature)
+            response_text, in_tok, out_tok = call_bedrock(client, model_id, messages, max_tokens, draw_temp)
         except Exception as e:
             return recs, False, str(e)
+        if sampling_method == "branch" and slot > 0:
+            prefix = messages[-1]["content"][0]["text"]
+            generation = stitch_continuation(prefix, response_text)
+        else:
+            generation = response_text
         pred = extract_answer(generation)
         correct = pred is not None and pred == prob["answer"]
         seen_correct |= correct
         seen_incorrect |= not correct
         rec = {
             "item_idx": prob["item_idx"], "condition": full_condition, "model": model_key,
-            "persona_cond": persona_cond, "sample_slot": slot,
-            "temperature": temperature, "gold": prob["answer"], "pred": pred, "correct": correct,
+            "persona_cond": persona_cond, "sample_slot": slot, "sampling_method": sampling_method,
+            "temperature": draw_temp, "gold": prob["answer"], "pred": pred, "correct": correct,
             "gen_len": out_tok, "in_tok": in_tok, "generation": generation,
         }
         recs.append(rec)
@@ -191,6 +260,7 @@ def main():
     ap.add_argument("--personas", nargs="+", default=["vanilla"], choices=PERSONA_CONDITIONS)
     ap.add_argument("--temperatures", nargs="+", type=float, default=[1.0],
                     help="Bedrock Converse caps this at [0,1] for all providers tested so far")
+    ap.add_argument("--sampling-methods", nargs="+", default=["plain"], choices=SAMPLING_METHODS)
     ap.add_argument("--max-tokens", type=int, default=64000)
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--yes", action="store_true")
@@ -201,10 +271,11 @@ def main():
         args.n_items, args.n_max, args.models = 3, 4, args.models[:1]
 
     problems = load_aime2024()[:args.n_items]
-    max_calls = len(problems) * len(args.models) * len(args.personas) * len(args.temperatures) * args.n_max
+    max_calls = (len(problems) * len(args.models) * len(args.personas)
+                * len(args.temperatures) * len(args.sampling_methods) * args.n_max)
     eff_tokens = {mk: min(args.max_tokens, MODEL_MAX_TOKENS.get(mk, args.max_tokens)) for mk in args.models}
     print(f"items={len(problems)}  models={args.models}  personas={args.personas}  "
-          f"temperatures={args.temperatures}  n_max={args.n_max}")
+          f"temperatures={args.temperatures}  sampling_methods={args.sampling_methods}  n_max={args.n_max}")
     print(f"worst-case calls={max_calls} (stops early per-item once pass+fail both seen)")
     print(f"effective max_tokens per model (clamped to Bedrock's per-model ceiling): {eff_tokens}")
     print(f"UNKNOWN per-model $/call for gpt-5.6-*/claude-opus-5 -- "
@@ -225,7 +296,7 @@ def main():
     git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
     manifest = {
         "models": {k: MODELS[k] for k in args.models}, "personas": args.personas,
-        "temperatures": args.temperatures, "region": REGION,
+        "temperatures": args.temperatures, "sampling_methods": args.sampling_methods, "region": REGION,
         "n_items": len(problems), "n_max": args.n_max, "max_tokens": args.max_tokens,
         "git_sha": git_sha, "timestamp": tag,
     }
@@ -236,21 +307,22 @@ def main():
     out_path = outdir / "raw" / "samples.jsonl"
     dropped = []
     errors = []
-    per_cond = {f"{mk}_{pc}_t{t}": {"calls": 0, "in": 0, "out": 0}
-                for mk in args.models for pc in args.personas for t in args.temperatures}
+    per_cond = {f"{mk}_{pc}_t{t}_{sm}": {"calls": 0, "in": 0, "out": 0}
+                for mk in args.models for pc in args.personas for t in args.temperatures
+                for sm in args.sampling_methods}
     total_in = total_out = total_calls = 0
 
-    jobs = [(mk, pc, t, prob) for mk in args.models for pc in args.personas
-            for t in args.temperatures for prob in problems]
+    jobs = [(mk, pc, t, sm, prob) for mk in args.models for pc in args.personas
+            for t in args.temperatures for sm in args.sampling_methods for prob in problems]
     write_lock = threading.Lock()
     with open(out_path, "x") as f, ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futs = {pool.submit(run_item, client, mk, MODELS[mk], pc, t, prob, args.n_max,
+        futs = {pool.submit(run_item, client, mk, MODELS[mk], pc, t, sm, prob, args.n_max,
                             min(args.max_tokens, MODEL_MAX_TOKENS.get(mk, args.max_tokens)),
-                            f, write_lock): (mk, pc, t, prob)
-                for mk, pc, t, prob in jobs}
+                            f, write_lock): (mk, pc, t, sm, prob)
+                for mk, pc, t, sm, prob in jobs}
         for fut in as_completed(futs):
-            mk, pc, t, prob = futs[fut]
-            cond = f"{mk}_{pc}_t{t}"
+            mk, pc, t, sm, prob = futs[fut]
+            cond = f"{mk}_{pc}_t{t}_{sm}"
             recs, mixed, err = fut.result()
             total_calls += len(recs)
             total_in += sum(r["in_tok"] for r in recs)
