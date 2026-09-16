@@ -1,6 +1,6 @@
 # AIME24 Diversity ↔ Pass@k — Intermediate Report
 
-*Date: 2026-09-09. Branch: `aime-persona`. Full design: `docs/aime_passk_diversity_design.md`.*
+*Date: 2026-09-09, updated 2026-09-11 (§5c, §5d). Branch: `aime-persona`. Full design: `docs/aime_passk_diversity_design.md`.*
 
 ## 1. Research question
 
@@ -36,6 +36,7 @@ Models actually used (`us-east-2`, real pricing via AWS Pricing API):
 | llama70b | `meta.llama3-3-70b-instruct-v1:0` | 0.72 | 0.72 | max_tokens capped at 8192 |
 | mistrallarge3 | `mistral.mistral-large-3-675b-instruct` | 0.50 | 1.50 | 64000 OK |
 | kimik2thinking | `moonshot.kimi-k2-thinking` | 0.60 | 2.50 | 64000 OK; matches prior Aug report |
+| haiku45 | `us.anthropic.claude-haiku-4-5-20251001-v1:0` | — | — | 64000 OK; **no verified pricing** — Anthropic absent from Pricing API in this environment, and the AWS pricing page doesn't list this model either |
 
 ## 3. Infrastructure bugs found and fixed (`scripts/28_aime_multimodel_rollout.py`)
 
@@ -143,6 +144,75 @@ models improve monotonically with temperature; the third peaks at an intermediat
 still well above the low-temperature end. Simply increasing sampling randomness does more for
 pass@k than any amount of persona engineering did.
 
+**5c. Claude Haiku 4.5** (`us.anthropic.claude-haiku-4-5-20251001-v1:0`, added 2026-09-11 —
+requires the `us.*` inference-profile calling convention, 64000 max_tokens OK). **No verified
+pricing**: Anthropic models are entirely absent from the AWS Pricing API in this environment (zero
+results for every Anthropic model queried, not just this one), and the AWS Bedrock pricing page
+doesn't list Haiku 4.5 either — costs below are token counts only, no $ figure.
+
+| condition | pass@k | pass@1 | mean_acc | mixed |
+|---|---|---|---|---|
+| vanilla t0.5 | **0.767** | 0.633 | 0.571 | 14 |
+| vanilla t0.7 | 0.733 | 0.500 | 0.490 | 16 |
+| vanilla t1.0 | **0.767** | 0.567 | 0.537 | 16 |
+| axis t1.0 | 0.700 | 0.533 | 0.533 | 11 |
+| matched t1.0 | 0.700 | 0.567 | 0.509 | 13 |
+
+Runs: `runs/aime24-multimodel-rollout-20260911-071144Z-pid45009/` (vanilla t1.0),
+`runs/aime24-multimodel-rollout-20260911-071925Z-pid45455/` (vanilla t0.5/t0.7),
+`runs/aime24-multimodel-rollout-20260911-071925Z-pid45456/` (axis/matched t1.0).
+
+**Result: mostly consistent with the pattern above, one difference.** Persona still hurts
+slightly (axis/matched both 0.700 vs vanilla's 0.767) — same direction as qwen32b/mistral.
+**Temperature is flat for Haiku 4.5** (0.5 and 1.0 tie at 0.767, 0.7 dips) — unlike llama70b/mistral's
+monotonic increase, Haiku doesn't seem to benefit from higher sampling temperature the same way,
+maybe already sampling with enough effective diversity at low temperature. Also notably strong
+in absolute terms: at vanilla/t1.0, Haiku 4.5 (0.767) sits just behind mistral-large-3 (0.833)
+and clearly ahead of qwen32b (0.567) and llama70b (0.433) — a "cheap/small" model card outperforming
+two larger ones on this benchmark.
+
+**5d. Sampling-method comparison** (2026-09-11 — per correction that persona-prompting may just
+*constrain* the model rather than diversify it, since it fixes an identity before the model even
+sees the problem). Three alternatives, none of which pre-impose an identity, added to
+`scripts/28_aime_multimodel_rollout.py` as a `--sampling-methods` dimension:
+
+- `randtemp` — redraw temperature ~ Uniform(0.6, 1.0) independently per draw, instead of one fixed
+  value for the whole item.
+- `selfdiverse` — multi-turn: show the model its own prior attempt, then ask it to "solve again
+  using a genuinely different method... do not reuse the same formulas, case structure, or overall
+  approach."
+- `branch` — cut a prior successful draw's text at a random point in its middle third (snapped to
+  a sentence boundary) and resample the continuation from there via Bedrock's assistant-prefill,
+  rather than restarting the whole reasoning chain.
+
+Models: qwen32b (representative of "sampling-sensitive" models — see §5b's non-monotonic
+temperature response) and Haiku 4.5 (representative of "sampling-insensitive" — flat across
+all three temperatures in §5c). 30 items, `n_max=12`, vanilla persona, base temp=1.0.
+Runs: `runs/aime24-multimodel-rollout-20260911-073539Z-pid46484/` (qwen32b),
+`runs/aime24-multimodel-rollout-20260911-073539Z-pid46483/` (haiku45).
+
+| method | qwen32b pass@k | haiku45 pass@k |
+|---|---|---|
+| plain (baseline) | 0.467 | 0.700 |
+| **randtemp** | **0.533** | **0.767** |
+| selfdiverse | 0.400 | 0.700 |
+| branch | 0.433 | 0.667 ⚠️ |
+
+⚠️ Haiku 4.5's `branch` condition hit an intermittent `ValidationException` on 15/30 items during
+assistant-prefill continuation (manually reproduced the identical request afterward and it
+succeeded both times — not a permanent/deterministic failure, cause unclear). Fixed by adding
+`ValidationException` to the retry list, but **this run's branch number for haiku45 is on
+incomplete per-item data and shouldn't be trusted at face value**; qwen32b's `branch` run had zero
+errors and is solid.
+
+**Result: `randtemp` is the only one of the three that beat its baseline on both models** —
+extends the §5b temperature finding rather than replacing it (don't fix one temperature, vary it
+per draw). `selfdiverse` underperformed on qwen32b (0.400 vs 0.467) and was neutral on Haiku
+(0.700 = 0.700) — the explicit "must be different" instruction may impose its own kind of
+constraint (forcing an unfamiliar method can hurt a weaker model more than a stronger one).
+`branch`'s qwen32b number (0.433) doesn't beat baseline either; its Haiku number is unreliable
+per the caveat above and would need a clean rerun to trust.
+
 ---
 
 ## 6. Cost accounting (running total, this session)
@@ -154,7 +224,10 @@ pass@k than any amount of persona engineering did.
 | Step 4 diversity scoring (metric a, reduced metric b) | $0 (local Ollama only) |
 | §5a persona-sampling comparison | $6.52 |
 | §5b temperature-sampling comparison | $6.83 |
-| **Total** | **≈ $29.25** |
+| §5c Haiku 4.5 (5 conditions, 1287 calls, in=230,693 out=1,593,122 tokens) | unpriced (see §2) |
+| §5d sampling-method comparison, qwen32b (1087 calls, in=960,061 out=2,495,390 tokens) | $1.64 |
+| §5d sampling-method comparison, haiku45 (1004 calls, in=601,105 out=1,166,342 tokens) | unpriced (see §2) |
+| **Total (priced portion)** | **≈ $30.89** |
 
 Of this, **~$1.65 was lost outright to the directory-collision bug** (§3.3) before the fix landed.
 
@@ -176,3 +249,10 @@ Of this, **~$1.65 was lost outright to the directory-collision bug** (§3.3) bef
    (Steps 3–5) — do groups built from higher-temperature rollouts show higher diversity scores
    *and* is that what's driving their higher pass@k, or is it a separate mechanism (e.g. just
    raw coverage, independent of anything a diversity metric would capture)?
+6. **Haiku 4.5's intermittent `ValidationException` on assistant-prefill continuation** (§5d) —
+   cause unknown, not reliably reproducible in isolation. Needs a clean rerun (now that
+   `ValidationException` is in the retry list) before the `branch` number for Haiku is trustworthy.
+7. `randtemp` is the one clear positive so far across both §5b and §5d — worth testing at larger
+   scale (more items, both remaining unpriced-but-accessible models) before treating it as settled,
+   and worth trying on top of the group-construction pipeline (§5-item 5 above) rather than only
+   as a standalone pass@k lever.
