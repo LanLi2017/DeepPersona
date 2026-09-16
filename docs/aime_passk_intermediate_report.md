@@ -79,16 +79,12 @@ in the original design: stratifying "controlled" groups by *number-correct* is a
 show genuine pass@k variance. Built **1193 groups** (684 at k=4, 509 at k=8; 22 skipped for
 insufficient pool size).
 
-**Step 4 — diversity scoring.**
+**Step 4 — diversity scoring.** This experiment only ever used metrics that need no training and
+no GPU:
 - *Metric (a), simple DTW/Wasserstein* (`scripts/31_aime_diversity_score.py`): local Ollama
-  (`nomic-embed-text`), no GPU needed, ~30 min pure-Python compute.
-- *Metric (b), validated ensemble* (`scripts/13-26`'s claim:dtw + 2 trained heads):
-  **BLOCKED** — this machine has no CUDA GPU (Apple Silicon Mac) and the trained head weights
-  (`head_l15_l4_L18*.pt`) don't exist in this checkout (produced in a prior GPU session,
-  never synced).
-- *Reduced metric (b), claim:dtw only* (`scripts/33_aime_claimdtw.py`): the one ensemble
-  component computable without GPU/trained weights — claim extraction via local
-  `qwen2.5:1.5b`, embedding via `nomic-embed-text`. ~40 min local compute.
+  (`nomic-embed-text`), ~30 min pure-Python compute.
+- *Metric (b), claim:dtw* (`scripts/33_aime_claimdtw.py`): claim extraction via local
+  `qwen2.5:1.5b`, embedding via `nomic-embed-text`, compared via DTW. ~40 min local compute.
 
 **Step 5 — correlation (`scripts/32_aime_correlation.py`), controlling for answer entropy:**
 
@@ -96,13 +92,13 @@ insufficient pool size).
 |---|---|---|---|---|---|
 | dtw_div (a) | −0.058 (ns) | +0.044 (ns) | +0.026 (ns) | −0.128 (ns) | **NULL** — matches N1-dry |
 | wass_div (a) | −0.031 (ns) | −0.027 (ns) | **+0.251\*** | −0.122 (ns) | mostly NULL, 1/3 models |
-| claim_dtw (reduced b) | **+0.151\*** | −0.045 (ns) | **+0.301\*** | **+0.181\*** | **2/3 models positive** — most encouraging signal so far, but only 1/3 of the validated ensemble and not multiple-comparison corrected |
+| claim_dtw (b) | **+0.151\*** | −0.045 (ns) | **+0.301\*** | **+0.181\*** | **2/3 models positive** — most encouraging signal so far, but not multiple-comparison corrected |
 
-Simple metrics reproduce the established program-wide null (F0a/F2/F3/N1-dry): raw correlations
+Metric (a) reproduces the established program-wide null (F0a/F2/F3/N1-dry): raw correlations
 are significant but sign-inconsistent across models, and mostly vanish once entropy is
-controlled. The logic-focused reduced metric is more promising but incomplete — the full
-validated ensemble (which is what's actually been shown to resist style-gaming) still needs a
-GPU machine to test properly.
+controlled. Metric (b), the logic-focused claim:dtw, is more promising (2/3 models positive after
+controlling for entropy) but should be treated as a first read, not a confirmed effect, pending a
+held-out replication.
 
 ---
 
@@ -237,22 +233,19 @@ Of this, **~$1.65 was lost outright to the directory-collision bug** (§3.3) bef
 
 1. **GPT-5.6-Sol/Terra, Claude Opus-5/Sonnet-5** — still need Bedrock model-access grants from
    the account owner; can't proceed on the original model roster without this.
-2. **Full validated diversity ensemble** — needs a GPU machine with the trained head weights
-   (`head_l15_l4_L18_v2.pt`, `head_l4_L18_v2.pt`) restored from wherever the original N2/V6b
-   session produced them; not resolvable from this laptop.
-3. **Why does llama70b not benefit from temperature** the way qwen32b/mistral do? — untested
+2. **Why does llama70b not benefit from temperature** the way qwen32b/mistral do? — untested
    hypothesis, could be a model-specific sampling-diversity ceiling.
-4. **Multiple-comparisons caveat** on the claim:dtw partial-correlation result (§4) — 2/3
+3. **Multiple-comparisons caveat** on the claim:dtw partial-correlation result (§4) — 2/3
    significant models is encouraging but not yet a confirmed effect; would benefit from a
    held-out replication before treating it as established.
-5. Next natural extension of §5: combine the temperature finding with group construction
+4. Next natural extension of §5: combine the temperature finding with group construction
    (Steps 3–5) — do groups built from higher-temperature rollouts show higher diversity scores
    *and* is that what's driving their higher pass@k, or is it a separate mechanism (e.g. just
    raw coverage, independent of anything a diversity metric would capture)?
-6. **Haiku 4.5's intermittent `ValidationException` on assistant-prefill continuation** (§5d) —
+5. **Haiku 4.5's intermittent `ValidationException` on assistant-prefill continuation** (§5d) —
    cause unknown, not reliably reproducible in isolation. Needs a clean rerun (now that
    `ValidationException` is in the retry list) before the `branch` number for Haiku is trustworthy.
-7. `randtemp` is the one clear positive so far across both §5b and §5d — worth testing at larger
+6. `randtemp` is the one clear positive so far across both §5b and §5d — worth testing at larger
    scale (more items, both remaining unpriced-but-accessible models) before treating it as settled,
-   and worth trying on top of the group-construction pipeline (§5-item 5 above) rather than only
+   and worth trying on top of the group-construction pipeline (item 4 above) rather than only
    as a standalone pass@k lever.
