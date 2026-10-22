@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>G1 Behavioral Equivalence Calibration</title>
+  <style>
+    :root { color-scheme: light; font-family: ui-sans-serif, system-ui, sans-serif; }
+    body { margin: 0; background: #f5f3ee; color: #1f2933; }
+    header { position: sticky; top: 0; z-index: 2; padding: 14px 22px; background: #17324d; color: white; display: flex; gap: 16px; align-items: center; }
+    header h1 { margin: 0; font-size: 18px; }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; border: 1px solid #9aa6b2; border-radius: 6px; padding: 7px 11px; background: white; }
+    header button { margin-left: auto; }
+    main { max-width: 1500px; margin: 20px auto; padding: 0 18px 60px; }
+    .meta, .rubric { background: white; border: 1px solid #d8d4ca; border-radius: 8px; padding: 14px; margin-bottom: 14px; }
+    .guide { font-size: 13px; line-height: 1.45; }
+    .guide p { margin: 5px 0; }
+    .task { white-space: pre-wrap; max-height: 180px; overflow: auto; }
+    .candidate-tabs { display: flex; gap: 8px; margin: 14px 0; }
+    .candidate-tabs button.active { background: #17324d; color: white; }
+    .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .trajectory { background: white; border: 1px solid #d8d4ca; border-radius: 8px; min-width: 0; }
+    .trajectory h2 { margin: 0; padding: 11px 14px; font-size: 15px; border-bottom: 1px solid #ddd; }
+    .events { height: 480px; overflow: auto; padding: 10px 14px; }
+    .event { white-space: pre-wrap; overflow-wrap: anywhere; border-bottom: 1px solid #eee; padding: 8px 0; font: 12px/1.45 ui-monospace, monospace; }
+    .form-grid { display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 12px; }
+    label { display: grid; gap: 5px; font-size: 13px; }
+    textarea { min-height: 74px; resize: vertical; }
+    .nav { display: flex; justify-content: space-between; margin-top: 14px; }
+    .status { font-size: 13px; opacity: .85; }
+    @media (max-width: 900px) { .comparison, .form-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>G1 Behavioral Equivalence Calibration</h1>
+    <label>Annotator <input id="annotator-id" size="14" placeholder="required for export"></label>
+    <span id="progress" class="status"></span>
+    <button id="download">Export JSONL</button>
+  </header>
+  <main>
+    <section class="meta guide">
+      <strong>Label the behavior, not wording or outcome alone.</strong>
+      <p><b>E0:</b> only text, identifiers, or serialization differ; grounded transitions are identical.</p>
+      <p><b>E1:</b> low-level realization differs, but information, meaningful state effects, ordered subgoals, and recovery strategy agree.</p>
+      <p><b>E2:</b> information coverage, meaningful state effects, subgoal/order, or recovery strategy differs.</p>
+      <p>Use <b>ambiguous</b> when the visible trace cannot support a confident distinction.</p>
+    </section>
+    <section class="meta">
+      <div id="item-meta"></div>
+      <h3>Task</h3>
+      <div id="task" class="task"></div>
+    </section>
+    <div id="tabs" class="candidate-tabs"></div>
+    <section class="comparison">
+      <article class="trajectory"><h2 id="anchor-title"></h2><div id="anchor-events" class="events"></div></article>
+      <article class="trajectory"><h2 id="candidate-title"></h2><div id="candidate-events" class="events"></div></article>
+    </section>
+    <section class="rubric">
+      <div class="form-grid" id="rubric-form"></div>
+      <label style="margin-top:12px">Notes<textarea id="notes"></textarea></label>
+    </section>
+    <div class="nav"><button id="previous">Previous item</button><button id="next">Next item</button></div>
+  </main>
+  <script src="calibration_data.js"></script>
+  <script>
+    const data = window.G1_CALIBRATION_DATA;
+    const storageKey = "trace-g1-calibration-v1";
+    const annotatorKey = "trace-g1-calibration-annotator-v1";
+    const saved = JSON.parse(localStorage.getItem(storageKey) || "{}");
+    const annotatorInput = document.getElementById("annotator-id");
+    annotatorInput.value = localStorage.getItem(annotatorKey) || "";
+    annotatorInput.oninput = () => localStorage.setItem(annotatorKey, annotatorInput.value);
+    let itemIndex = 0;
+    let slot = "A";
+    const fields = [
+      ["same_information", "Same information acquired?", ["yes", "mostly", "no", "unclear"]],
+      ["same_state_effect", "Same meaningful state effect?", ["yes", "mostly", "no", "unclear"]],
+      ["same_subgoal_order", "Same subgoals and order?", ["yes", "mostly", "no", "unclear"]],
+      ["same_recovery_behavior", "Same recovery behavior?", ["yes", "mostly", "no", "not_applicable", "unclear"]],
+      ["training_interchangeable", "Interchangeable as training data?", ["yes", "mostly", "no", "unclear"]],
+      ["label", "Overall label", ["E0", "E1", "E2", "ambiguous"]],
+      ["confidence", "Confidence", ["high", "medium", "low"]],
+    ];
+    function key() { return `${data[itemIndex].triplet_id}:${slot}`; }
+    function answer() { return saved[key()] ||= {}; }
+    function eventText(event) {
+      if (event.kind === "environment_transition") return `#${event.index} ACTION: ${event.action}\nOBS: ${event.observation}`;
+      const calls = event.tool_calls ? `\nTOOLS: ${JSON.stringify(event.tool_calls)}` : "";
+      return `#${event.index} [${event.actor}] ${event.text}${calls}`;
+    }
+    function renderEvents(target, trajectory) {
+      target.innerHTML = "";
+      const task = document.createElement("div"); task.className = "event";
+      task.textContent = `TASK: ${trajectory.task_instruction}`; target.appendChild(task);
+      trajectory.events.forEach(event => {
+        const div = document.createElement("div"); div.className = "event"; div.textContent = eventText(event); target.appendChild(div);
+      });
+    }
+    function renderForm() {
+      const form = document.getElementById("rubric-form"); form.innerHTML = "";
+      fields.forEach(([name, title, options]) => {
+        const label = document.createElement("label"); label.textContent = title;
+        const select = document.createElement("select"); select.dataset.field = name;
+        select.innerHTML = `<option value="">— choose —</option>` + options.map(x => `<option value="${x}">${x}</option>`).join("");
+        select.value = answer()[name] || "";
+        select.onchange = () => { answer()[name] = select.value || null; persist(); };
+        label.appendChild(select); form.appendChild(label);
+      });
+      const notes = document.getElementById("notes"); notes.value = answer().notes || "";
+      notes.oninput = () => { answer().notes = notes.value; persist(); };
+    }
+    function persist() { localStorage.setItem(storageKey, JSON.stringify(saved)); updateProgress(); }
+    function updateProgress() {
+      const total = data.length * 3;
+      const complete = Object.values(saved).filter(row => row.label && row.confidence).length;
+      document.getElementById("progress").textContent = `${complete}/${total} labelled`;
+    }
+    function render() {
+      const item = data[itemIndex]; const candidate = item.candidates.find(x => x.slot === slot);
+      document.getElementById("item-meta").textContent = `${item.triplet_id} · ${item.benchmark} · candidate ${slot}`;
+      document.getElementById("task").textContent = item.task_instruction;
+      document.getElementById("anchor-title").textContent = `Anchor · ${item.anchor.outcome} · ${item.anchor.length} events`;
+      document.getElementById("candidate-title").textContent = `Candidate ${slot} · ${candidate.outcome} · ${candidate.length} events`;
+      renderEvents(document.getElementById("anchor-events"), item.anchor);
+      renderEvents(document.getElementById("candidate-events"), candidate);
+      const tabs = document.getElementById("tabs"); tabs.innerHTML = "";
+      item.candidates.forEach(value => {
+        const button = document.createElement("button"); button.textContent = `Candidate ${value.slot}`;
+        button.className = value.slot === slot ? "active" : "";
+        button.onclick = () => { slot = value.slot; render(); }; tabs.appendChild(button);
+      });
+      renderForm(); updateProgress();
+    }
+    document.getElementById("previous").onclick = () => { itemIndex = (itemIndex + data.length - 1) % data.length; slot = "A"; render(); };
+    document.getElementById("next").onclick = () => { itemIndex = (itemIndex + 1) % data.length; slot = "A"; render(); };
+    document.getElementById("download").onclick = () => {
+      const annotatorId = annotatorInput.value.trim();
+      if (!annotatorId) { alert("Enter an annotator ID before exporting."); annotatorInput.focus(); return; }
+      const rows = data.flatMap(item => item.candidates.map(candidate => ({
+        schema: "g1-calibration-annotation/1", rubric_version: "g1-e0-e2-v1", annotator_id: annotatorId,
+        triplet_id: item.triplet_id, candidate_slot: candidate.slot,
+        same_information: null, same_state_effect: null, same_subgoal_order: null,
+        same_recovery_behavior: null, training_interchangeable: null,
+        label: null, confidence: null, notes: "", ...(saved[`${item.triplet_id}:${candidate.slot}`] || {})
+      })));
+      const blob = new Blob([rows.map(row => JSON.stringify(row)).join("\n") + "\n"], {type: "application/jsonl"});
+      const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "g1_calibration_annotations.jsonl"; link.click(); URL.revokeObjectURL(link.href);
+    };
+    render();
+  </script>
+</body>
+</html>

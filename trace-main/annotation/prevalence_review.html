@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>E2 Prevalence Review</title>
+  <style>
+    :root { color-scheme: light; font-family: ui-sans-serif, system-ui, sans-serif; }
+    body { margin: 0; background: #f5f3ee; color: #1f2933; }
+    header { position: sticky; top: 0; z-index: 2; padding: 12px 20px; background: #17324d; color: white; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+    header h1 { margin: 0; font-size: 17px; }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; border: 1px solid #9aa6b2; border-radius: 6px; padding: 7px 11px; background: white; }
+    header button { margin-left: auto; }
+    main { max-width: 1500px; margin: 18px auto; padding: 0 18px 60px; }
+    .card { background: white; border: 1px solid #d8d4ca; border-radius: 8px; padding: 13px; margin-bottom: 13px; }
+    .guide { font-size: 13px; line-height: 1.45; }
+    .guide p { margin: 5px 0; }
+    .task { white-space: pre-wrap; max-height: 160px; overflow: auto; }
+    .diff { display: grid; grid-template-columns: 34px 1fr 1fr; border: 1px solid #d8d4ca; border-radius: 8px; overflow: hidden; background: white; margin-bottom: 13px; }
+    .diff > div { padding: 6px 8px; border-bottom: 1px solid #eee; min-width: 0; overflow-wrap: anywhere; font: 12px/1.4 ui-monospace, monospace; white-space: pre-wrap; }
+    .diff .head { background: #e8edf2; font-family: inherit; font-weight: 650; }
+    .diff .mark { text-align: center; color: #607080; }
+    .diff .same { background: #f7faf7; }
+    .diff .changed { background: #fff8dc; }
+    .diff .empty { background: #f2f2f2; color: #999; }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 12px; }
+    label { display: grid; gap: 5px; font-size: 13px; }
+    label small { color: #586574; line-height: 1.35; }
+    textarea { min-height: 82px; resize: vertical; }
+    .nav { display: flex; justify-content: space-between; margin-top: 13px; }
+    .status { font-size: 13px; opacity: .9; }
+    @media (max-width: 900px) { .form-grid { grid-template-columns: 1fr; } .diff { grid-template-columns: 26px 1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>E2 prevalence review (AppWorld / tau2 telecom)</h1>
+    <label>Annotator <input id="annotator-id" size="13" placeholder="required"></label>
+    <span id="progress" class="status"></span>
+    <button id="download">Export JSONL</button>
+  </header>
+  <main>
+    <section class="card guide">
+      <strong>Both trajectories passed the benchmark's success check. Judge strategy and quality, not success.</strong>
+      <p><b>E0:</b> only wording, identifiers or serialization differ.</p>
+      <p><b>E1:</b> same strategy. These differences are allowed: extra/missing read-only lookups not used in a decision, reordering of independent steps, equivalent authentication, retries of the same call.</p>
+      <p><b>E2:</b> a decision-relevant difference. This means different state-changing actions, decisions based on different key information, a different order of <i>dependent</i> subgoals, or a different recovery branch.</p>
+      <p><b>High quality:</b> completes the actual request, follows policy, makes no unnecessary or harmful changes, invents nothing.</p>
+    </section>
+    <section class="card">
+      <div id="item-meta"></div>
+      <h3>Task</h3><div id="task" class="task"></div>
+      <p id="note" class="guide"></p>
+    </section>
+    <section id="diff" class="diff"></section>
+    <section class="card">
+      <div class="form-grid" id="form"></div>
+      <label style="margin-top:12px">Evidence / notes<small>Cite step numbers (A k vs B j).</small><textarea id="evidence"></textarea></label>
+    </section>
+    <div class="nav"><button id="previous">Previous pair</button><button id="next">Next pair</button></div>
+  </main>
+  <script src="prevalence_review_data.js"></script>
+  <script>
+    const items = window.PREV_REVIEW_DATA;
+    const storageKey = "trace-g1-prevalence-review-v1";
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(storageKey) || "{}"); } catch (e) {}
+    const annotatorInput = document.getElementById("annotator-id");
+    try { annotatorInput.value = localStorage.getItem(storageKey + "-annotator") || ""; } catch (e) {}
+    annotatorInput.oninput = () => { try { localStorage.setItem(storageKey + "-annotator", annotatorInput.value); } catch (e) {} };
+    let cursor = 0;
+    const fields = [
+      ["a_high_quality", "Trajectory A high quality?", "Completes the request, follows policy, no unnecessary changes, nothing invented.", ["yes", "no", "unclear"]],
+      ["b_high_quality", "Trajectory B high quality?", "Same criteria for B.", ["yes", "no", "unclear"]],
+      ["same_state_effect", "Same state-changing actions/effects?", "Ignore retries of the same call.", ["yes", "mostly", "no", "unclear"]],
+      ["same_key_information", "Decisions based on the same key information?", "Unused extra lookups do not count.", ["yes", "mostly", "no", "unclear"]],
+      ["same_dependency_order", "Same order of dependent subgoals?", "Reordering independent steps is still 'yes'.", ["yes", "mostly", "no", "unclear"]],
+      ["same_recovery", "Same recovery branch?", "After a failure or block: same fallback?", ["yes", "mostly", "no", "not_applicable", "unclear"]],
+      ["label", "Overall label", "E0 / E1 / E2 under the decision-relevance boundary.", ["E0", "E1", "E2", "ambiguous"]],
+      ["confidence", "Confidence", "", ["high", "medium", "low"]],
+    ];
+    const answer = () => saved[items[cursor].pair_id] ||= {};
+    const norm = s => s.replace(/"access_token": "[^"]*"/g, "");
+    function align(left, right) {
+      const n = left.length, m = right.length, dp = Array.from({length: n + 1}, () => Array(m + 1).fill(0));
+      for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) dp[i][j] = norm(left[i]) === norm(right[j]) ? 1 + dp[i + 1][j + 1] : Math.max(dp[i + 1][j], dp[i][j + 1]);
+      const rows = []; let i = 0, j = 0;
+      while (i < n || j < m) {
+        if (i < n && j < m && norm(left[i]) === norm(right[j])) rows.push([`A${i + 1}. ` + left[i++], `B${j + 1}. ` + right[j++], "same"]);
+        else if (j < m && (i === n || dp[i][j + 1] >= dp[i + 1][j])) rows.push([null, `B${j + 1}. ` + right[j++], "changed"]);
+        else rows.push([`A${i + 1}. ` + left[i++], null, "changed"]);
+      }
+      return rows;
+    }
+    function renderDiff(it) {
+      const box = document.getElementById("diff"); box.innerHTML = "";
+      [["", "head"], ["Trajectory A", "head"], ["Trajectory B", "head"]].forEach(([t, c]) => { const d = document.createElement("div"); d.className = c; d.textContent = t; box.appendChild(d); });
+      align(it.A, it.B).forEach(([a, b, kind]) => {
+        const mk = document.createElement("div"); mk.className = "mark " + kind; mk.textContent = kind === "same" ? "=" : (a ? "−" : "+"); box.appendChild(mk);
+        [a, b].forEach(s => { const d = document.createElement("div"); d.className = s ? kind : "empty"; d.textContent = s || "—"; box.appendChild(d); });
+      });
+    }
+    function renderForm() {
+      const form = document.getElementById("form"); form.innerHTML = "";
+      fields.forEach(([name, title, help, opts]) => {
+        const label = document.createElement("label"); label.textContent = title;
+        const small = document.createElement("small"); small.textContent = help;
+        const sel = document.createElement("select");
+        sel.innerHTML = '<option value="">— choose —</option>' + opts.map(x => `<option value="${x}">${x}</option>`).join("");
+        sel.value = answer()[name] || ""; sel.onchange = () => { answer()[name] = sel.value || null; persist(); };
+        label.appendChild(small); label.appendChild(sel); form.appendChild(label);
+      });
+      const ev = document.getElementById("evidence"); ev.value = answer().evidence || ""; ev.oninput = () => { answer().evidence = ev.value; persist(); };
+    }
+    function persist() { try { localStorage.setItem(storageKey, JSON.stringify(saved)); } catch (e) {} updateProgress(); }
+    function updateProgress() { document.getElementById("progress").textContent = `${Object.values(saved).filter(x => x.label && x.a_high_quality && x.b_high_quality).length}/${items.length} done`; }
+    function render() {
+      const it = items[cursor];
+      document.getElementById("item-meta").textContent = `${it.pair_id} · ${it.domain} · pair ${cursor + 1}/${items.length}`;
+      document.getElementById("task").textContent = it.task;
+      document.getElementById("note").textContent = it.note;
+      renderDiff(it); renderForm(); updateProgress(); window.scrollTo(0, 0);
+    }
+    document.getElementById("previous").onclick = () => { cursor = (cursor + items.length - 1) % items.length; render(); };
+    document.getElementById("next").onclick = () => { cursor = (cursor + 1) % items.length; render(); };
+    document.getElementById("download").onclick = () => {
+      const id = annotatorInput.value.trim();
+      if (!id) { alert("Enter an annotator ID before exporting."); annotatorInput.focus(); return; }
+      const rows = items.map(it => ({schema: "g1-prevalence-human/1", rubric: "decision-relevance-2026-10-07", annotator_id: id, pair_id: it.pair_id, ...(saved[it.pair_id] || {})}));
+      const blob = new Blob([rows.map(x => JSON.stringify(x)).join("\n") + "\n"], {type: "application/jsonl"});
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `prevalence_review_${id}.jsonl`; a.click(); URL.revokeObjectURL(a.href);
+    };
+    render();
+  </script>
+</body>
+</html>

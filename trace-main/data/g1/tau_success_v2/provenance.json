@@ -1,0 +1,223 @@
+{
+  "schema": "g1-tau-success-provenance/1",
+  "selection": {
+    "task_ids": [
+      "16",
+      "28",
+      "69",
+      "75"
+    ],
+    "approved_trajectory_ids": {
+      "16": [
+        "taubench-retail:16:memory4b_tau:r2",
+        "taubench-retail:16:memoryT_tau27:r0",
+        "taubench-retail:16:memoryT_tau27:r1"
+      ],
+      "28": [
+        "taubench-retail:28:memoryT_tau27:r0",
+        "taubench-retail:28:memoryT_tau27:r1",
+        "taubench-retail:28:memoryT_tau27:r2"
+      ],
+      "69": [
+        "taubench-retail:69:memoryT_tau27:r0",
+        "taubench-retail:69:memoryT_tau27:r1",
+        "taubench-retail:69:memoryT_tau27:r2"
+      ],
+      "75": [
+        "taubench-retail:75:memoryT_tau27:r0",
+        "taubench-retail:75:memoryT_tau27:r1",
+        "taubench-retail:75:memoryT_tau27:r2"
+      ]
+    },
+    "split": "train",
+    "source_sha256": {
+      "memory4b_tau.jsonl": "d2c321b7c3f9032c9d8d7b4b2cb5d4188e68c4fcaced3dd4d91e3a4ba360c93c",
+      "memoryT_tau27.jsonl": "2562b8a42214ee766e3b85779ccf557c9aaa92d375bb3464fc63c75aa83774b5",
+      "memory_tau27_retail.jsonl": "88ebd52da07868e975b8bdf82a9b2acaf997358bd646562f486dc90427acd6bb",
+      "memory_tau_retail.jsonl": "d3a982f5c07d483b7c95b1808ee588c1dd51ac88c4f81e477277f55903a2572d"
+    },
+    "triplet_rule": "freeze three independently generated trajectories that passed the execution gate and received majority high-quality approval in the three-model candidate screen",
+    "anchor_rule": "medoid of the selected three trajectories"
+  },
+  "items": [
+    {
+      "triplet_id": "tau-success-01",
+      "task_id": "16",
+      "split": "train",
+      "anchor_trajectory_id": "taubench-retail:16:memory4b_tau:r2",
+      "candidate_slots": {
+        "A": {
+          "role": "surface_equivalent",
+          "source_trajectory_id": null
+        },
+        "B": {
+          "role": "natural_near",
+          "source_trajectory_id": "taubench-retail:16:memoryT_tau27:r0"
+        },
+        "C": {
+          "role": "natural_far",
+          "source_trajectory_id": "taubench-retail:16:memoryT_tau27:r1"
+        }
+      },
+      "natural_candidate_normalized_action_edit": {
+        "near": 0.0,
+        "far": 0.1111111111111111
+      },
+      "surface_transform": {
+        "method": "consistent_identifier_anonymization_and_tool_serialization",
+        "identifier_mapping": {
+          "fatima_johnson_7581": "<ID_A>",
+          "#W5199551": "<ORDER_A>",
+          "#W8665881": "<ORDER_B>",
+          "#W9389413": "<ORDER_C>",
+          "2554056026": "<ID_B>",
+          "paypal_5364164": "<ID_C>",
+          "fatima.johnson2300@example.com": "<EMAIL_A>"
+        },
+        "grounded_trajectory_id": "taubench-retail:16:memory4b_tau:r2"
+      },
+      "execution_gate": {
+        "success": true,
+        "reward_at_least_one": true,
+        "non_vacuous_db_write_target": true,
+        "tool_errors": 0,
+        "human_transfer": false
+      }
+    },
+    {
+      "triplet_id": "tau-success-02",
+      "task_id": "28",
+      "split": "train",
+      "anchor_trajectory_id": "taubench-retail:28:memoryT_tau27:r0",
+      "candidate_slots": {
+        "A": {
+          "role": "natural_far",
+          "source_trajectory_id": "taubench-retail:28:memoryT_tau27:r2"
+        },
+        "B": {
+          "role": "surface_equivalent",
+          "source_trajectory_id": null
+        },
+        "C": {
+          "role": "natural_near",
+          "source_trajectory_id": "taubench-retail:28:memoryT_tau27:r1"
+        }
+      },
+      "natural_candidate_normalized_action_edit": {
+        "near": 0.2222222222222222,
+        "far": 0.4444444444444444
+      },
+      "surface_transform": {
+        "method": "consistent_identifier_anonymization_and_tool_serialization",
+        "identifier_mapping": {
+          "isabella_johansson_2152": "<ID_A>",
+          "#W3792453": "<ORDER_A>",
+          "4293355847": "<ID_B>",
+          "paypal_3024827": "<ID_C>",
+          "#W7181492": "<ORDER_B>",
+          "5753502325": "<ID_D>",
+          "9851293632": "<ID_E>",
+          "#W5565470": "<ORDER_C>",
+          "#W2575533": "<ORDER_D>",
+          "9570044148": "<ID_F>",
+          "6857426243": "<ID_G>",
+          "isabella.johansson9391@example.com": "<EMAIL_A>"
+        },
+        "grounded_trajectory_id": "taubench-retail:28:memoryT_tau27:r0"
+      },
+      "execution_gate": {
+        "success": true,
+        "reward_at_least_one": true,
+        "non_vacuous_db_write_target": true,
+        "tool_errors": 0,
+        "human_transfer": false
+      }
+    },
+    {
+      "triplet_id": "tau-success-03",
+      "task_id": "69",
+      "split": "train",
+      "anchor_trajectory_id": "taubench-retail:69:memoryT_tau27:r1",
+      "candidate_slots": {
+        "A": {
+          "role": "natural_near",
+          "source_trajectory_id": "taubench-retail:69:memoryT_tau27:r2"
+        },
+        "B": {
+          "role": "natural_far",
+          "source_trajectory_id": "taubench-retail:69:memoryT_tau27:r0"
+        },
+        "C": {
+          "role": "surface_equivalent",
+          "source_trajectory_id": null
+        }
+      },
+      "natural_candidate_normalized_action_edit": {
+        "near": 0.0,
+        "far": 0.5
+      },
+      "surface_transform": {
+        "method": "consistent_identifier_anonymization_and_tool_serialization",
+        "identifier_mapping": {
+          "emma_smith_8564": "<ID_A>",
+          "#W2417020": "<ORDER_A>",
+          "emma.smith3991@example.com": "<EMAIL_A>",
+          "#W5605613": "<ORDER_B>",
+          "#W3614011": "<ORDER_C>"
+        },
+        "grounded_trajectory_id": "taubench-retail:69:memoryT_tau27:r1"
+      },
+      "execution_gate": {
+        "success": true,
+        "reward_at_least_one": true,
+        "non_vacuous_db_write_target": true,
+        "tool_errors": 0,
+        "human_transfer": false
+      }
+    },
+    {
+      "triplet_id": "tau-success-04",
+      "task_id": "75",
+      "split": "train",
+      "anchor_trajectory_id": "taubench-retail:75:memoryT_tau27:r0",
+      "candidate_slots": {
+        "A": {
+          "role": "surface_equivalent",
+          "source_trajectory_id": null
+        },
+        "B": {
+          "role": "natural_far",
+          "source_trajectory_id": "taubench-retail:75:memoryT_tau27:r2"
+        },
+        "C": {
+          "role": "natural_near",
+          "source_trajectory_id": "taubench-retail:75:memoryT_tau27:r1"
+        }
+      },
+      "natural_candidate_normalized_action_edit": {
+        "near": 0.0,
+        "far": 0.2
+      },
+      "surface_transform": {
+        "method": "consistent_identifier_anonymization_and_tool_serialization",
+        "identifier_mapping": {
+          "liam.moore6985@example.com": "<EMAIL_A>",
+          "#W6908222": "<ORDER_A>",
+          "9924732112": "<ID_A>",
+          "8555936349": "<ID_B>",
+          "4063058357": "<ID_C>",
+          "paypal_4518393": "<ID_D>",
+          "liam_moore_4057": "<USER_A>"
+        },
+        "grounded_trajectory_id": "taubench-retail:75:memoryT_tau27:r0"
+      },
+      "execution_gate": {
+        "success": true,
+        "reward_at_least_one": true,
+        "non_vacuous_db_write_target": true,
+        "tool_errors": 0,
+        "human_transfer": false
+      }
+    }
+  ]
+}

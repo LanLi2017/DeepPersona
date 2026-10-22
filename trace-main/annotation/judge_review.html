@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Judge Spot Check</title>
+  <style>
+    :root {
+      --bg: #f6f5f1; --card: #ffffff; --ink: #1d232a; --muted: #5d6874; --line: #e2dfd7;
+      --accent: #1f4e79; --e2: #8a3ffc; --e1: #1e7b4f; --e0: #6b7280; --bad: #b42318; --good: #157f3b;
+      --chip: #eef1f5; --sel: #e8f0fb;
+      font-family: ui-sans-serif, system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+      --bg: #15181c; --card: #1d2127; --ink: #e6e8eb; --muted: #9aa4af; --line: #2e343c;
+      --accent: #7fb2ea; --e2: #b18cff; --e1: #4cc38a; --e0: #9aa4af; --bad: #f97066; --good: #4cc38a;
+      --chip: #262b33; --sel: #233246; } }
+    :root[data-theme="dark"] {
+      --bg: #15181c; --card: #1d2127; --ink: #e6e8eb; --muted: #9aa4af; --line: #2e343c;
+      --accent: #7fb2ea; --e2: #b18cff; --e1: #4cc38a; --e0: #9aa4af; --bad: #f97066; --good: #4cc38a;
+      --chip: #262b33; --sel: #233246; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.55; }
+    header { position: sticky; top: 0; z-index: 3; background: var(--card); border-bottom: 1px solid var(--line);
+      padding: 10px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    header h1 { font-size: 16px; margin: 0 8px 0 0; }
+    header .sp { flex: 1; }
+    input, textarea, button { font: inherit; color: inherit; }
+    input[type=text] { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; width: 110px; }
+    button { cursor: pointer; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; }
+    button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    main { max-width: 1180px; margin: 18px auto; padding: 0 16px 80px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; }
+    .meta { color: var(--muted); font-size: 13px; }
+    .task { font-size: 15px; margin-top: 6px; white-space: pre-wrap; }
+    .verdict { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+    .big { font-size: 26px; font-weight: 700; padding: 2px 14px; border-radius: 10px; background: var(--chip); }
+    .E2 { color: var(--e2); } .E1 { color: var(--e1); } .E0 { color: var(--e0); }
+    .q { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; }
+    .yes { color: var(--good); font-weight: 600; } .no { color: var(--bad); font-weight: 600; } .unclear { color: var(--muted); font-weight: 600; }
+    h3 { margin: 0 0 8px; font-size: 14px; color: var(--muted); font-weight: 600; letter-spacing: .02em; }
+    ul { margin: 0; padding-left: 20px; } li { margin: 4px 0; }
+    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .diff li { font-weight: 500; }
+    .form { display: grid; gap: 14px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .row > b { width: 120px; font-size: 14px; }
+    .opt { border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; cursor: pointer; user-select: none; font-size: 14px; }
+    .opt.on { background: var(--sel); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+    textarea { width: 100%; min-height: 70px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+    details { margin-top: 10px; } summary { cursor: pointer; color: var(--accent); font-size: 14px; }
+    .judge { border-top: 1px solid var(--line); padding: 8px 0; font-size: 13px; }
+    .raw { max-height: 460px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 8px;
+      font: 11.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .raw div { border-bottom: 1px dashed var(--line); padding: 4px 0; }
+    .nav { display: flex; justify-content: space-between; gap: 8px; }
+    .dots { display: flex; gap: 5px; flex-wrap: wrap; }
+    .dot { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line); font-size: 11px; display: grid; place-items: center; cursor: pointer; }
+    .dot.done { background: var(--sel); border-color: var(--accent); }
+    .dot.cur { outline: 2px solid var(--accent); }
+    @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } .row > b { width: 100%; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Judge 抽查</h1>
+    <label class="meta">标注人 <input type="text" id="who" placeholder="必填"></label>
+    <div class="dots" id="dots"></div>
+    <span class="sp"></span>
+    <span class="meta" id="progress"></span>
+    <button class="primary" id="export">导出 JSONL</button>
+  </header>
+  <main>
+    <section class="card">
+      <div class="meta" id="meta"></div>
+      <div class="task" id="task"></div>
+    </section>
+    <section class="card">
+      <h3>LLM judge 结论（GPT-5.6 / Kimi / Opus 多数票）</h3>
+      <div class="verdict">
+        <span class="big" id="label"></span>
+        <span class="meta" id="votes"></span>
+        <span class="q">A 质量 <span id="aq"></span></span>
+        <span class="q">B 质量 <span id="bq"></span></span>
+      </div>
+    </section>
+    <section class="card diff">
+      <h3>关键差异</h3>
+      <ul id="keydiff"></ul>
+    </section>
+    <section class="cols">
+      <div class="card"><h3>A 做了什么</h3><ul id="sumA"></ul></div>
+      <div class="card"><h3>B 做了什么</h3><ul id="sumB"></ul></div>
+    </section>
+    <section class="card form">
+      <h3>你的判断</h3>
+      <div class="row" id="r_label"><b>标签</b></div>
+      <div class="row" id="r_aq"><b>A 质量判断</b></div>
+      <div class="row" id="r_bq"><b>B 质量判断</b></div>
+      <textarea id="note" placeholder="备注（可选）：哪里判错了、为什么"></textarea>
+      <details><summary>三个 judge 各自的理由</summary><div id="judges"></div></details>
+      <details><summary>原始轨迹（A / B）</summary>
+        <div class="cols" style="margin-top:8px"><div class="raw" id="rawA"></div><div class="raw" id="rawB"></div></div>
+      </details>
+    </section>
+    <div class="nav"><button id="prev">← 上一对</button><button id="next">下一对 →</button></div>
+  </main>
+  <script src="judge_review_data.js"></script>
+  <script>
+    const items = window.JUDGE_REVIEW_DATA || [];
+    const KEY = "trace-g1-judge-review-v1";
+    let saved = {}; try { saved = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) {}
+    const who = document.getElementById("who");
+    try { who.value = localStorage.getItem(KEY + "-who") || ""; } catch (e) {}
+    who.oninput = () => { try { localStorage.setItem(KEY + "-who", who.value); } catch (e) {} };
+    let cur = 0;
+    const qtxt = { yes: "高", no: "低", unclear: "不确定" };
+    const fields = {
+      r_label: ["label_review", [["agree", "同意"], ["E0", "应为 E0"], ["E1", "应为 E1"], ["E2", "应为 E2"], ["unsure", "不确定"]]],
+      r_aq: ["a_quality_review", [["agree", "同意"], ["disagree", "不同意"], ["unsure", "不确定"]]],
+      r_bq: ["b_quality_review", [["agree", "同意"], ["disagree", "不同意"], ["unsure", "不确定"]]],
+    };
+    const ans = () => saved[items[cur].pair_id] ||= {};
+    const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {} paintDots(); };
+    const done = id => { const a = saved[id] || {}; return a.label_review && a.a_quality_review && a.b_quality_review; };
+    function list(el, xs) { el.innerHTML = ""; (xs || []).forEach(t => { const li = document.createElement("li"); li.textContent = t; el.appendChild(li); }); }
+    function q(el, v) { el.textContent = qtxt[v] || v; el.className = v; }
+    function paintDots() {
+      const box = document.getElementById("dots"); box.innerHTML = "";
+      items.forEach((it, i) => { const d = document.createElement("span"); d.className = "dot" + (done(it.pair_id) ? " done" : "") + (i === cur ? " cur" : "");
+        d.textContent = i + 1; d.onclick = () => { cur = i; render(); }; box.appendChild(d); });
+      document.getElementById("progress").textContent = `${items.filter(it => done(it.pair_id)).length}/${items.length} 已完成`;
+    }
+    function render() {
+      const it = items[cur];
+      document.getElementById("meta").textContent = `第 ${cur + 1}/${items.length} 对 · ${it.pair_id} · 任务`;
+      document.getElementById("task").textContent = it.task;
+      const lab = document.getElementById("label"); lab.textContent = it.label; lab.className = "big " + it.label;
+      document.getElementById("votes").textContent = "票数 " + Object.entries(it.votes).map(([k, v]) => `${k}×${v}`).join(" · ");
+      q(document.getElementById("aq"), it.a_hq); q(document.getElementById("bq"), it.b_hq);
+      list(document.getElementById("keydiff"), it.digest.key_differences);
+      list(document.getElementById("sumA"), it.digest.A); list(document.getElementById("sumB"), it.digest.B);
+      Object.entries(fields).forEach(([rid, [name, opts]]) => {
+        const row = document.getElementById(rid); row.querySelectorAll(".opt").forEach(x => x.remove());
+        opts.forEach(([v, t]) => { const s = document.createElement("span"); s.className = "opt" + (ans()[name] === v ? " on" : ""); s.textContent = t;
+          s.onclick = () => { ans()[name] = v; persist(); render(); }; row.appendChild(s); });
+      });
+      const note = document.getElementById("note"); note.value = ans().note || ""; note.oninput = () => { ans().note = note.value; persist(); };
+      const J = document.getElementById("judges"); J.innerHTML = "";
+      Object.entries(it.judges).forEach(([j, v]) => { const d = document.createElement("div"); d.className = "judge";
+        d.textContent = `${j}: ${v.label} · A ${qtxt[v.a_high_quality] || v.a_high_quality} · B ${qtxt[v.b_high_quality] || v.b_high_quality}\n${v.difference_summary}\n${v.rationale}`;
+        d.style.whiteSpace = "pre-wrap"; J.appendChild(d); });
+      [["rawA", it.raw.A], ["rawB", it.raw.B]].forEach(([id, xs]) => { const el = document.getElementById(id); el.innerHTML = "";
+        xs.forEach(s => { const d = document.createElement("div"); d.textContent = s; el.appendChild(d); }); });
+      paintDots(); window.scrollTo(0, 0);
+    }
+    document.getElementById("prev").onclick = () => { cur = (cur + items.length - 1) % items.length; render(); };
+    document.getElementById("next").onclick = () => { cur = (cur + 1) % items.length; render(); };
+    document.getElementById("export").onclick = () => {
+      const id = who.value.trim(); if (!id) { alert("请先填写标注人"); who.focus(); return; }
+      const rows = items.map(it => ({ schema: "g1-judge-spotcheck/1", annotator_id: id, pair_id: it.pair_id,
+        judge_label: it.label, judge_a_hq: it.a_hq, judge_b_hq: it.b_hq, ...(saved[it.pair_id] || {}) }));
+      const blob = new Blob([rows.map(r => JSON.stringify(r)).join("\n") + "\n"], { type: "application/jsonl" });
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `judge_spotcheck_${id}.jsonl`; a.click(); URL.revokeObjectURL(a.href);
+    };
+    if (items.length) render();
+  </script>
+</body>
+</html>

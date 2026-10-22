@@ -1,0 +1,74 @@
+[
+  {
+    "candidate_id": "quality-01",
+    "trajectory_id": "taubench-retail:22:memory4b_tau:r0",
+    "votes": {
+      "gpt56": "no",
+      "sonnet": "no",
+      "opus": "no"
+    },
+    "majority_high_quality": "no",
+    "unanimous": true,
+    "requires_human_review": true
+  },
+  {
+    "candidate_id": "quality-02",
+    "trajectory_id": "taubench-retail:75:memory4b_tau:r0",
+    "votes": {
+      "gpt56": "no",
+      "sonnet": "no",
+      "opus": "no"
+    },
+    "majority_high_quality": "no",
+    "unanimous": true,
+    "requires_human_review": true
+  },
+  {
+    "candidate_id": "quality-03",
+    "trajectory_id": "taubench-retail:75:memory4b_tau:r2",
+    "votes": {
+      "gpt56": "no",
+      "sonnet": "no",
+      "opus": "no"
+    },
+    "majority_high_quality": "no",
+    "unanimous": true,
+    "requires_human_review": true
+  },
+  {
+    "candidate_id": "quality-04",
+    "trajectory_id": "taubench-retail:75:memoryT_tau27:r0",
+    "votes": {
+      "gpt56": "no",
+      "sonnet": "yes",
+      "opus": "yes"
+    },
+    "majority_high_quality": "yes",
+    "unanimous": false,
+    "requires_human_review": true
+  },
+  {
+    "candidate_id": "quality-05",
+    "trajectory_id": "taubench-retail:75:memoryT_tau27:r1",
+    "votes": {
+      "gpt56": "yes",
+      "sonnet": "yes",
+      "opus": "yes"
+    },
+    "majority_high_quality": "yes",
+    "unanimous": true,
+    "requires_human_review": false
+  },
+  {
+    "candidate_id": "quality-06",
+    "trajectory_id": "taubench-retail:75:memoryT_tau27:r2",
+    "votes": {
+      "gpt56": "no",
+      "sonnet": "yes",
+      "opus": "yes"
+    },
+    "majority_high_quality": "yes",
+    "unanimous": false,
+    "requires_human_review": true
+  }
+]

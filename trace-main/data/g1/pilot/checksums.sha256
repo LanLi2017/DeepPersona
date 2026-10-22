@@ -1,0 +1,4 @@
+7b1a53b7e5b7d5f2fff428dd8eae401b069a09cab1b12a65c957295573cb1e41  annotation/calibration_data.js
+c09d49011af74fe10a921dda0e28e2d9ef7d37e2efc58033bc0b23adf756c11b  data/g1/pilot/annotations.template.jsonl
+823a295d2f8559f237c4982fb2c3aedeb8eaa57892bf4b06c5aa311ad0c71ce7  data/g1/pilot/calibration_triplets.jsonl
+63e58c7691aa299d6ee93b89a330c67a33ededf0df7276d9f1db4b61bf7104be  data/g1/pilot/provenance.json

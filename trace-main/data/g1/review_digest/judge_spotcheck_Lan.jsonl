@@ -1,0 +1,12 @@
+{"schema":"g1-judge-spotcheck/1","annotator_id":"Lan","pair_id":"gn-08","judge_label":"E2","judge_a_hq":"yes","judge_b_hq":"split","label_review":"agree","a_quality_review":"agree","b_quality_review":"agree"}
+{"schema":"g1-judge-spotcheck/1","annotator_id":"Lan","pair_id":"gn-05","judge_label":"E2","judge_a_hq":"yes","judge_b_hq":"yes","label_review":"agree","a_quality_review":"agree","b_quality_review":"agree"}
+{"schema":"g1-judge-spotcheck/1","annotator_id":"Lan","pair_id":"aw-20","judge_label":"E2","judge_a_hq":"yes","judge_b_hq":"yes","label_review":"agree","b_quality_review":"agree","a_quality_review":"disagree"}
+{"schema":"g1-judge-spotcheck/1","annotator_id":"Lan","pair_id":"tc-15","judge_label":"E2","judge_a_hq":"yes","judge_b_hq":"no","label_review":"agree","a_quality_review":"agree","b_quality_review":"agree"}
+{"schema":"g1-judge-spotcheck/1","annotator_id":"Lan","pair_id":"gn-07","judge_label":"E2","judge_a_hq":"no","judge_b_hq":"yes","b_quality_review":"disagree","a_quality_review":"agree","label_review":"agree","note":"B also encounter issues so it should be low quality"}
+{"schema":"g1-judge-spotcheck/1","annotator_id":"Lan","pair_id":"aw-29","judge_label":"E1","judge_a_hq":"yes","judge_b_hq":"no","label_review":"agree","a_quality_review":"agree","b_quality_review":"agree"}
+{"schema":"g1-judge-spotcheck/1","annotator_id":"Lan","pair_id":"gn-01","judge_label":"E1","judge_a_hq":"yes","judge_b_hq":"yes","label_review":"agree","a_quality_review":"agree","b_quality_review":"agree"}
+{"schema":"g1-judge-spotcheck/1","annotator_id":"Lan","pair_id":"gn-14","judge_label":"E2","judge_a_hq":"yes","judge_b_hq":"yes","label_review":"agree","a_quality_review":"agree","b_quality_review":"unsure"}
+{"schema":"g1-judge-spotcheck/1","annotator_id":"Lan","pair_id":"gn-13","judge_label":"E1","judge_a_hq":"yes","judge_b_hq":"yes","a_quality_review":"agree","b_quality_review":"agree","label_review":"agree"}
+{"schema":"g1-judge-spotcheck/1","annotator_id":"Lan","pair_id":"gn-02","judge_label":"E2","judge_a_hq":"yes","judge_b_hq":"yes","label_review":"agree","a_quality_review":"agree","b_quality_review":"agree"}
+{"schema":"g1-judge-spotcheck/1","annotator_id":"Lan","pair_id":"aw-08","judge_label":"E2","judge_a_hq":"yes","judge_b_hq":"yes","label_review":"agree","a_quality_review":"agree","b_quality_review":"agree"}
+{"schema":"g1-judge-spotcheck/1","annotator_id":"Lan","pair_id":"gn-12","judge_label":"E1","judge_a_hq":"yes","judge_b_hq":"yes","label_review":"agree","a_quality_review":"agree","b_quality_review":"agree"}

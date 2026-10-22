@@ -1,0 +1,70 @@
+{
+  "schema": "g1-tau-success-panel-summary/1",
+  "judges": [
+    "gpt56",
+    "sonnet",
+    "opus"
+  ],
+  "comparisons": 12,
+  "unanimous_comparisons": 10,
+  "pairwise_label_agreement": {
+    "gpt56__sonnet": 0.9166666666666666,
+    "gpt56__opus": 0.9166666666666666,
+    "sonnet__opus": 0.8333333333333334
+  },
+  "fleiss_kappa": 0.7876106194690264,
+  "observed_pair_agreement": 0.8888888888888888,
+  "chance_agreement": 0.47685185185185186,
+  "surface_e0_votes_correct": 12,
+  "surface_e0_votes_total": 12,
+  "anchor_high_quality_yes_votes": 9,
+  "anchor_high_quality_votes_total": 12,
+  "natural_high_quality_yes_votes": 19,
+  "natural_high_quality_votes_total": 24,
+  "natural_majority_high_quality": {
+    "yes": 8
+  },
+  "natural_majority_labels": {
+    "E1": 7,
+    "E0": 1
+  },
+  "human_review": [
+    {
+      "triplet_id": "tau-success-01",
+      "candidate_slot": "A"
+    },
+    {
+      "triplet_id": "tau-success-01",
+      "candidate_slot": "C"
+    },
+    {
+      "triplet_id": "tau-success-02",
+      "candidate_slot": "B"
+    },
+    {
+      "triplet_id": "tau-success-02",
+      "candidate_slot": "C"
+    },
+    {
+      "triplet_id": "tau-success-03",
+      "candidate_slot": "A"
+    },
+    {
+      "triplet_id": "tau-success-03",
+      "candidate_slot": "B"
+    },
+    {
+      "triplet_id": "tau-success-04",
+      "candidate_slot": "A"
+    },
+    {
+      "triplet_id": "tau-success-04",
+      "candidate_slot": "B"
+    }
+  ],
+  "limitations": [
+    "LLM consensus is pre-annotation, not human ground truth.",
+    "The panel must remain hidden until independent human annotation is complete.",
+    "Natural near/far sampling roles are not expected E1/E2 labels."
+  ]
+}

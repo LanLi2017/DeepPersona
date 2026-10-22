@@ -1,0 +1,2 @@
+# Copied benchmark assets are byte-preserved and may contain upstream whitespace.
+data/g1/assets/** -diff

@@ -1,0 +1,135 @@
+{
+  "schema": "g1-seed-manifest/1",
+  "sources": {
+    "alfworld": {
+      "locator": "../npm/repro_alf_icrl/results/memory_trajectories.jsonl",
+      "sha256": "3d3287bfdb72730b228697254ec7f8af2d09b2a1ebc9f9aa9edbd8dc864be1b9",
+      "records": 120
+    },
+    "taubench_retail": {
+      "locator": "../npm/repro_tau/results/memory_tau_retail.jsonl",
+      "sha256": "d3a982f5c07d483b7c95b1808ee588c1dd51ac88c4f81e477277f55903a2572d",
+      "records": 50,
+      "excluded_incomplete_task_ids": [
+        "2",
+        "29",
+        "44",
+        "76"
+      ],
+      "asset_fingerprints": {
+        "db.json": "413a65160adbdb5fde0ffc0015c49b6d70250b10c18128de169b597af7766765",
+        "policy.md": "2c9652afbce57d6e087768d37cda64d31c53d50b3e3225cfdb791bac66466467",
+        "split_tasks.json": "ed0580ec52575b63fbf76568af42490da6ee7783ecb4aa81af46961291358f20",
+        "tasks.json": "8e03ebce7901bd6218e7a7dc3105faa9324091a68058f7fe61c65262868812e8"
+      }
+    }
+  },
+  "selection_policy": {
+    "alfworld": {
+      "quotas": {
+        "clean": 3,
+        "cool": 3,
+        "examine": 3,
+        "heat": 3,
+        "pick_two": 2,
+        "put": 2
+      },
+      "ranking": [
+        "mixed outcome first",
+        "more unique exact action sequences first",
+        "success fraction closest to 0.5",
+        "gamefile lexical order"
+      ]
+    },
+    "taubench_retail": {
+      "count": 16,
+      "filters": [
+        "all episodes contain at least one message"
+      ],
+      "ranking": [
+        "mixed outcome first",
+        "more unique exact tool-name sequences first",
+        "success fraction closest to 0.5",
+        "numeric task ID"
+      ]
+    }
+  },
+  "selected": {
+    "alfworld": {
+      "tasks": 16,
+      "trajectories": 96,
+      "successful_trajectories": 32,
+      "task_groups": {
+        "clean": 3,
+        "cool": 3,
+        "examine": 3,
+        "heat": 3,
+        "pick_two": 2,
+        "put": 2
+      },
+      "task_outcomes": {
+        "all_failure": 3,
+        "mixed": 13
+      },
+      "mean_unique_exact_sequences_per_task": 3.75,
+      "selected_task_ids": [
+        "json_2.1.1/train/pick_clean_then_place_in_recep-SoapBar-None-Shelf-429/trial_T20190909_042350_986623/game.tw-pddl",
+        "json_2.1.1/train/pick_clean_then_place_in_recep-SoapBar-None-Shelf-429/trial_T20190909_045206_464190/game.tw-pddl",
+        "json_2.1.1/train/pick_clean_then_place_in_recep-SoapBar-None-Shelf-429/trial_T20190909_100836_067219/game.tw-pddl",
+        "json_2.1.1/train/pick_cool_then_place_in_recep-Pot-None-Cabinet-5/trial_T20190906_235541_875587/game.tw-pddl",
+        "json_2.1.1/train/pick_cool_then_place_in_recep-Pot-None-CounterTop-17/trial_T20190909_013407_550007/game.tw-pddl",
+        "json_2.1.1/train/pick_cool_then_place_in_recep-Tomato-None-GarbageCan-6/trial_T20190909_083011_638518/game.tw-pddl",
+        "json_2.1.1/train/look_at_obj_in_light-AlarmClock-None-DeskLamp-305/trial_T20190908_082723_323728/game.tw-pddl",
+        "json_2.1.1/train/look_at_obj_in_light-AlarmClock-None-DeskLamp-305/trial_T20190908_120957_213796/game.tw-pddl",
+        "json_2.1.1/train/look_at_obj_in_light-CD-None-DeskLamp-307/trial_T20190906_200412_559520/game.tw-pddl",
+        "json_2.1.1/train/pick_heat_then_place_in_recep-Mug-None-Shelf-5/trial_T20190906_203817_948928/game.tw-pddl",
+        "json_2.1.1/train/pick_heat_then_place_in_recep-Mug-None-Shelf-5/trial_T20190906_203924_704982/game.tw-pddl",
+        "json_2.1.1/train/pick_heat_then_place_in_recep-Potato-None-Fridge-11/trial_T20190909_011417_612328/game.tw-pddl",
+        "json_2.1.1/train/pick_two_obj_and_place-CreditCard-None-Sofa-207/trial_T20190909_085924_009925/game.tw-pddl",
+        "json_2.1.1/train/pick_two_obj_and_place-CreditCard-None-Sofa-207/trial_T20190909_090035_107554/game.tw-pddl",
+        "json_2.1.1/train/pick_and_place_simple-Cloth-None-CounterTop-414/trial_T20190909_065033_930964/game.tw-pddl",
+        "json_2.1.1/train/pick_and_place_simple-Mug-None-SideTable-329/trial_T20190909_032329_497305/game.tw-pddl"
+      ]
+    },
+    "taubench_retail": {
+      "tasks": 16,
+      "trajectories": 64,
+      "successful_trajectories": 25,
+      "task_groups": {
+        "retail": 16
+      },
+      "task_outcomes": {
+        "mixed": 16
+      },
+      "mean_unique_exact_sequences_per_task": 4.0,
+      "selected_task_ids": [
+        "10",
+        "13",
+        "14",
+        "24",
+        "30",
+        "34",
+        "43",
+        "46",
+        "47",
+        "48",
+        "50",
+        "57",
+        "58",
+        "66",
+        "67",
+        "73"
+      ]
+    },
+    "normalized_trajectories": 160
+  },
+  "normalization_diagnostics": {
+    "taubench_tool_call_parsing": {
+      "messages_with_tool_calls": 462,
+      "tool_call_name_matches": 462,
+      "tool_call_name_mismatches": 0
+    },
+    "alfworld_replay_asset_files": 48,
+    "taubench_retail_asset_files": 4
+  }
+}

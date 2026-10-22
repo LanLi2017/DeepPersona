@@ -1,0 +1,30 @@
+{
+  "schema": "g1-tau-quality-screen-provenance/1",
+  "items": [
+    {
+      "candidate_id": "quality-01",
+      "trajectory_id": "taubench-retail:3:memoryT_tau27:r0",
+      "task_id": "3"
+    },
+    {
+      "candidate_id": "quality-02",
+      "trajectory_id": "taubench-retail:3:memoryT_tau27:r1",
+      "task_id": "3"
+    },
+    {
+      "candidate_id": "quality-03",
+      "trajectory_id": "taubench-retail:3:memoryT_tau27:r2",
+      "task_id": "3"
+    },
+    {
+      "candidate_id": "quality-04",
+      "trajectory_id": "taubench-retail:16:memoryT_tau27:r0",
+      "task_id": "16"
+    },
+    {
+      "candidate_id": "quality-05",
+      "trajectory_id": "taubench-retail:29:memoryT_tau27:r0",
+      "task_id": "29"
+    }
+  ]
+}

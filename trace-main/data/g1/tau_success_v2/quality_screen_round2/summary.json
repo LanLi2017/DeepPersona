@@ -1,0 +1,27 @@
+{
+  "schema": "g1-tau-quality-screen-summary/1",
+  "round": "quality_screen_round2",
+  "judges": [
+    "gpt56",
+    "sonnet",
+    "opus"
+  ],
+  "returned_models": {
+    "gpt56": "gpt-5.6-sol",
+    "sonnet": "aws-claude-4-6-sonnet-fair",
+    "opus": "claude-opus-5"
+  },
+  "candidates": 6,
+  "majority_high_quality": {
+    "no": 3,
+    "yes": 3
+  },
+  "unanimous_candidates": 4,
+  "human_review": [
+    "taubench-retail:69:memory4b_tau:r0",
+    "taubench-retail:69:memory4b_tau:r1",
+    "taubench-retail:69:memoryT_tau27:r0",
+    "taubench-retail:69:memoryT_tau27:r2",
+    "taubench-retail:69:memory_tau_retail:r0"
+  ]
+}

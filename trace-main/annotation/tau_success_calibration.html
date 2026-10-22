@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tau-bench Success Strategy Calibration</title>
+  <style>
+    :root { color-scheme: light; font-family: ui-sans-serif, system-ui, sans-serif; }
+    body { margin: 0; background: #f5f3ee; color: #1f2933; }
+    header { position: sticky; top: 0; z-index: 2; padding: 12px 20px; background: #17324d; color: white; display: flex; gap: 15px; align-items: center; }
+    header h1 { margin: 0; font-size: 17px; }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; border: 1px solid #9aa6b2; border-radius: 6px; padding: 7px 11px; background: white; }
+    header button { margin-left: auto; }
+    main { max-width: 1500px; margin: 18px auto; padding: 0 18px 60px; }
+    .card { background: white; border: 1px solid #d8d4ca; border-radius: 8px; padding: 13px; margin-bottom: 13px; }
+    .guide { font-size: 13px; line-height: 1.45; }
+    .guide p { margin: 5px 0; }
+    .task { white-space: pre-wrap; max-height: 160px; overflow: auto; }
+    .tabs { display: flex; gap: 8px; margin: 13px 0; }
+    .tabs button.active { background: #17324d; color: white; }
+    .diff { display: grid; grid-template-columns: 42px 1fr 1fr; border: 1px solid #d8d4ca; border-radius: 8px; overflow: hidden; background: white; }
+    .diff > div { padding: 8px; border-bottom: 1px solid #eee; min-width: 0; overflow-wrap: anywhere; font: 12px/1.4 ui-monospace, monospace; }
+    .diff .head { background: #e8edf2; font-family: inherit; font-weight: 650; }
+    .diff .mark { text-align: center; color: #607080; }
+    .diff .same { background: #f7faf7; }
+    .diff .changed { background: #fff8dc; }
+    .diff .empty { background: #f2f2f2; color: #999; }
+    details { margin-top: 12px; }
+    .full-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+    .events { max-height: 440px; overflow: auto; border: 1px solid #ddd; padding: 8px; }
+    .event { white-space: pre-wrap; overflow-wrap: anywhere; border-bottom: 1px solid #eee; padding: 7px 0; font: 11px/1.4 ui-monospace, monospace; }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 12px; }
+    label { display: grid; gap: 5px; font-size: 13px; }
+    label small { color: #586574; line-height: 1.35; }
+    textarea { min-height: 82px; resize: vertical; }
+    .nav { display: flex; justify-content: space-between; margin-top: 13px; }
+    .status { font-size: 13px; opacity: .9; }
+    @media (max-width: 900px) { .full-grid, .form-grid { grid-template-columns: 1fr; } .diff { grid-template-columns: 32px 1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Tau-bench success-strategy calibration</h1>
+    <label>Annotator <input id="annotator-id" size="13" placeholder="required"></label>
+    <span id="progress" class="status"></span>
+    <button id="download">Export JSONL</button>
+  </header>
+  <main>
+    <section class="card guide">
+      <strong>All trajectories passed a strict success gate. Judge strategy, not wording or success.</strong>
+      <p><b>E0:</b> only identifiers or serialization differ; grounded calls are identical.</p>
+      <p><b>E1:</b> low-level calls, ordering, or redundant checks differ, but acquired information, state effect, ordered subgoals, and recovery policy agree.</p>
+      <p><b>E2:</b> information coverage, meaningful state effect, dependency order, or recovery strategy differs materially.</p>
+      <p>The aligned tool path is the default view. Expand the full conversation only when tool calls do not resolve the judgment.</p>
+    </section>
+    <section class="card">
+      <div id="item-meta"></div>
+      <h3>Task</h3><div id="task" class="task"></div>
+    </section>
+    <div id="tabs" class="tabs"></div>
+    <section id="tool-diff" class="diff"></section>
+    <details class="card">
+      <summary>Full conversation (expand only if needed)</summary>
+      <div class="full-grid">
+        <div><h3>Anchor</h3><div id="anchor-events" class="events"></div></div>
+        <div><h3 id="candidate-title"></h3><div id="candidate-events" class="events"></div></div>
+      </div>
+    </details>
+    <section class="card">
+      <div class="form-grid" id="rubric-form"></div>
+      <label style="margin-top:12px">Evidence / notes
+        <small>Cite the tool-step numbers supporting the decision.</small>
+        <textarea id="evidence"></textarea>
+      </label>
+    </section>
+    <div class="nav"><button id="previous">Previous comparison</button><button id="next">Next comparison</button></div>
+  </main>
+  <script src="tau_success_data.js"></script>
+  <script>
+    const data = window.TAU_SUCCESS_DATA;
+    const pairs = data.flatMap((item, itemIndex) => item.candidates.map(candidate => ({item, itemIndex, candidate})));
+    const storageKey = "trace-g1-tau-success-v2";
+    const annotatorKey = storageKey + "-annotator";
+    const saved = JSON.parse(localStorage.getItem(storageKey) || "{}");
+    const annotatorInput = document.getElementById("annotator-id");
+    annotatorInput.value = localStorage.getItem(annotatorKey) || "";
+    annotatorInput.oninput = () => localStorage.setItem(annotatorKey, annotatorInput.value);
+    let cursor = 0;
+    const fields = [
+      ["same_information", "Same information acquired?", "Did both paths query and use the same task-relevant user, order, item, and product information?", ["yes", "mostly", "no", "unclear"]],
+      ["same_state_effect", "Same meaningful state effect?", "Did they cause the same business-state changes, not merely receive the same binary reward?", ["yes", "mostly", "no", "unclear"]],
+      ["same_subgoal_order", "Same subgoals and dependency order?", "Ignore harmless retries; compare the high-level plan and ordering constraints.", ["yes", "mostly", "no", "unclear"]],
+      ["same_recovery_behavior", "Same recovery behavior?", "When blocked or uncertain, did they retry, correct inputs, seek alternatives, or escalate in the same way?", ["yes", "mostly", "no", "not_applicable", "unclear"]],
+      ["training_interchangeable", "Interchangeable as a demonstration?", "Would retaining either trajectory teach essentially the same successful decision pattern?", ["yes", "mostly", "no", "unclear"]],
+      ["label", "Overall label", "E0 = carrier only; E1 = same strategy; E2 = materially different successful strategy.", ["E0", "E1", "E2", "ambiguous"]],
+      ["confidence", "Confidence", "How strongly does the visible evidence support the overall label?", ["high", "medium", "low"]],
+    ];
+    function key() { const p = pairs[cursor]; return `${p.item.triplet_id}:${p.candidate.slot}`; }
+    function answer() { return saved[key()] ||= {}; }
+    function stepKey(step) { return `${step.name}\n${JSON.stringify(step.arguments)}`; }
+    function align(left, right) {
+      const n = left.length, m = right.length, dp = Array.from({length:n+1}, () => Array(m+1).fill(0));
+      for (let i=n-1;i>=0;i--) for (let j=m-1;j>=0;j--) dp[i][j] = stepKey(left[i]) === stepKey(right[j]) ? 1+dp[i+1][j+1] : Math.max(dp[i+1][j],dp[i][j+1]);
+      const rows=[]; let i=0,j=0;
+      while(i<n || j<m) {
+        if(i<n && j<m && stepKey(left[i])===stepKey(right[j])) { rows.push([left[i++],right[j++],"same"]); }
+        else if(j<m && (i===n || dp[i][j+1]>=dp[i+1][j])) { rows.push([null,right[j++],"changed"]); }
+        else { rows.push([left[i++],null,"changed"]); }
+      }
+      return rows;
+    }
+    function formatStep(step) { return step ? `${step.name}\n${JSON.stringify(step.arguments, null, 1)}` : "—"; }
+    function renderDiff(anchor, candidate) {
+      const box=document.getElementById("tool-diff"); box.innerHTML="";
+      [["","head"],["Anchor tool path","head"],[`Candidate ${candidate.slot} tool path`,"head"]].forEach(([text,cls])=>{const d=document.createElement("div");d.className=cls;d.textContent=text;box.appendChild(d);});
+      align(anchor.tool_steps,candidate.tool_steps).forEach(([a,b,kind],idx)=>{
+        const mark=document.createElement("div");mark.className="mark "+kind;mark.textContent=kind==="same"?"=":(a?"−":"+");box.appendChild(mark);
+        [a,b].forEach(step=>{const d=document.createElement("div");d.className=(step?kind:"empty");d.textContent=formatStep(step);box.appendChild(d);});
+      });
+    }
+    function eventText(event) { const calls=event.tool_calls?`\nTOOLS: ${JSON.stringify(event.tool_calls)}`:""; return `#${event.index} [${event.actor}] ${event.text}${calls}`; }
+    function renderEvents(target, trajectory) { target.innerHTML=""; trajectory.events.forEach(event=>{const d=document.createElement("div");d.className="event";d.textContent=eventText(event);target.appendChild(d);}); }
+    function renderForm() {
+      const form=document.getElementById("rubric-form");form.innerHTML="";
+      fields.forEach(([name,title,help,options])=>{const label=document.createElement("label");label.textContent=title;const small=document.createElement("small");small.textContent=help;const select=document.createElement("select");select.innerHTML='<option value="">— choose —</option>'+options.map(x=>`<option value="${x}">${x}</option>`).join("");select.value=answer()[name]||"";select.onchange=()=>{answer()[name]=select.value||null;persist();};label.appendChild(small);label.appendChild(select);form.appendChild(label);});
+      const evidence=document.getElementById("evidence");evidence.value=answer().evidence||"";evidence.oninput=()=>{answer().evidence=evidence.value;persist();};
+    }
+    function persist(){localStorage.setItem(storageKey,JSON.stringify(saved));updateProgress();}
+    function updateProgress(){const complete=Object.values(saved).filter(x=>x.label&&x.confidence).length;document.getElementById("progress").textContent=`${complete}/${pairs.length} labelled`;}
+    function render(){const {item,candidate}=pairs[cursor];document.getElementById("item-meta").textContent=`${item.triplet_id} · candidate ${candidate.slot} · comparison ${cursor+1}/${pairs.length}`;document.getElementById("task").textContent=item.task_instruction;document.getElementById("candidate-title").textContent=`Candidate ${candidate.slot}`;renderDiff(item.anchor,candidate);renderEvents(document.getElementById("anchor-events"),item.anchor);renderEvents(document.getElementById("candidate-events"),candidate);const tabs=document.getElementById("tabs");tabs.innerHTML="";item.candidates.forEach(value=>{const index=pairs.findIndex(p=>p.item.triplet_id===item.triplet_id&&p.candidate.slot===value.slot);const b=document.createElement("button");b.textContent=`Candidate ${value.slot}`;b.className=index===cursor?"active":"";b.onclick=()=>{cursor=index;render();};tabs.appendChild(b);});renderForm();updateProgress();}
+    document.getElementById("previous").onclick=()=>{cursor=(cursor+pairs.length-1)%pairs.length;render();};
+    document.getElementById("next").onclick=()=>{cursor=(cursor+1)%pairs.length;render();};
+    document.getElementById("download").onclick=()=>{const annotatorId=annotatorInput.value.trim();if(!annotatorId){alert("Enter an annotator ID before exporting.");annotatorInput.focus();return;}const rows=pairs.map(({item,candidate})=>({schema:"g1-tau-success-annotation/1",rubric_version:"g1-success-strategy-v2",annotator_id:annotatorId,triplet_id:item.triplet_id,candidate_slot:candidate.slot,same_information:null,same_state_effect:null,same_subgoal_order:null,same_recovery_behavior:null,training_interchangeable:null,label:null,confidence:null,evidence:"",...(saved[`${item.triplet_id}:${candidate.slot}`]||{})}));const blob=new Blob([rows.map(x=>JSON.stringify(x)).join("\n")+"\n"],{type:"application/jsonl"});const link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download=`tau_success_annotations_${annotatorId}.jsonl`;link.click();URL.revokeObjectURL(link.href);};
+    render();
+  </script>
+</body>
+</html>

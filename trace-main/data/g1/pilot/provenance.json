@@ -1,0 +1,402 @@
+{
+  "schema": "g1-calibration-provenance/1",
+  "selection": {
+    "alfworld_families": [
+      "clean",
+      "cool",
+      "examine",
+      "pick_two"
+    ],
+    "alfworld_preferred_outcomes": {
+      "cool": true
+    },
+    "taubench_retail_task_ids": [
+      "14",
+      "30",
+      "47",
+      "57"
+    ],
+    "natural_candidate_rule": "same-task and same-outcome; nearest and farthest distinct action sequences from a deterministic medoid anchor"
+  },
+  "items": [
+    {
+      "triplet_id": "cal-01",
+      "benchmark": "alfworld",
+      "task_id": "json_2.1.1/train/pick_clean_then_place_in_recep-SoapBar-None-Shelf-429/trial_T20190909_100836_067219",
+      "split": "train",
+      "anchor_trajectory_id": "alfworld:48d787e04c48:r0",
+      "outcome": false,
+      "candidate_slots": {
+        "A": {
+          "role": "surface_equivalent",
+          "source_trajectory_id": null
+        },
+        "B": {
+          "role": "natural_near",
+          "source_trajectory_id": "alfworld:48d787e04c48:r5"
+        },
+        "C": {
+          "role": "natural_far",
+          "source_trajectory_id": "alfworld:48d787e04c48:r1"
+        }
+      },
+      "natural_candidate_normalized_action_edit": {
+        "near": 0.1,
+        "far": 0.8
+      },
+      "surface_transform": {
+        "method": "consistent_entity_renaming_and_fixed_action_aliases",
+        "entity_mapping": {
+          "sinkbasin 1": "sinkbasin instance_A",
+          "shelf 1": "shelf instance_A",
+          "tissuebox 1": "tissuebox instance_A",
+          "shelf 2": "shelf instance_B",
+          "soapbottle 1": "soapbottle instance_A",
+          "spraybottle 2": "spraybottle instance_A",
+          "spraybottle 1": "spraybottle instance_B",
+          "shelf 3": "shelf instance_C",
+          "candle 2": "candle instance_A",
+          "candle 1": "candle instance_B",
+          "spraybottle 3": "spraybottle instance_C",
+          "bathtubbasin 1": "bathtubbasin instance_A",
+          "cloth 3": "cloth instance_A",
+          "cloth 2": "cloth instance_B",
+          "cloth 1": "cloth instance_C",
+          "garbagecan 1": "garbagecan instance_A",
+          "toiletpaper 2": "toiletpaper instance_A",
+          "toilet 1": "toilet instance_A",
+          "soapbar 1": "soapbar instance_A",
+          "soapbottle 2": "soapbottle instance_B"
+        },
+        "grounded_trajectory_id": "alfworld:48d787e04c48:r0"
+      }
+    },
+    {
+      "triplet_id": "cal-02",
+      "benchmark": "alfworld",
+      "task_id": "json_2.1.1/train/pick_cool_then_place_in_recep-Pot-None-Cabinet-5/trial_T20190906_235541_875587",
+      "split": "train",
+      "anchor_trajectory_id": "alfworld:cb947ae5ecfa:r3",
+      "outcome": true,
+      "candidate_slots": {
+        "A": {
+          "role": "natural_near",
+          "source_trajectory_id": "alfworld:cb947ae5ecfa:r5"
+        },
+        "B": {
+          "role": "surface_equivalent",
+          "source_trajectory_id": null
+        },
+        "C": {
+          "role": "natural_far",
+          "source_trajectory_id": "alfworld:cb947ae5ecfa:r0"
+        }
+      },
+      "natural_candidate_normalized_action_edit": {
+        "near": 0.2413793103448276,
+        "far": 0.5862068965517241
+      },
+      "surface_transform": {
+        "method": "consistent_entity_renaming_and_fixed_action_aliases",
+        "entity_mapping": {
+          "fridge 1": "fridge instance_A",
+          "countertop 1": "countertop instance_A",
+          "kettle 1": "kettle instance_A",
+          "knife 1": "knife instance_A",
+          "ladle 1": "ladle instance_A",
+          "mug 2": "mug instance_A",
+          "pan 1": "pan instance_A",
+          "plate 1": "plate instance_A",
+          "potato 2": "potato instance_A",
+          "saltshaker 1": "saltshaker instance_A",
+          "soapbottle 1": "soapbottle instance_A",
+          "spatula 2": "spatula instance_A",
+          "spoon 1": "spoon instance_A",
+          "vase 2": "vase instance_A",
+          "sinkbasin 1": "sinkbasin instance_A",
+          "apple 3": "apple instance_A",
+          "cup 1": "cup instance_A",
+          "egg 1": "egg instance_A",
+          "ladle 3": "ladle instance_B",
+          "lettuce 2": "lettuce instance_A",
+          "stoveburner 1": "stoveburner instance_A",
+          "pot 1": "pot instance_A",
+          "stoveburner 2": "stoveburner instance_B",
+          "pot 2": "pot instance_B",
+          "stoveburner 3": "stoveburner instance_C",
+          "stoveburner 4": "stoveburner instance_D",
+          "pot 3": "pot instance_C",
+          "cabinet 1": "cabinet instance_A"
+        },
+        "grounded_trajectory_id": "alfworld:cb947ae5ecfa:r3"
+      }
+    },
+    {
+      "triplet_id": "cal-03",
+      "benchmark": "alfworld",
+      "task_id": "json_2.1.1/train/look_at_obj_in_light-AlarmClock-None-DeskLamp-305/trial_T20190908_082723_323728",
+      "split": "train",
+      "anchor_trajectory_id": "alfworld:4059df0b8133:r3",
+      "outcome": false,
+      "candidate_slots": {
+        "A": {
+          "role": "natural_far",
+          "source_trajectory_id": "alfworld:4059df0b8133:r0"
+        },
+        "B": {
+          "role": "natural_near",
+          "source_trajectory_id": "alfworld:4059df0b8133:r1"
+        },
+        "C": {
+          "role": "surface_equivalent",
+          "source_trajectory_id": null
+        }
+      },
+      "natural_candidate_normalized_action_edit": {
+        "near": 0.325,
+        "far": 0.75
+      },
+      "surface_transform": {
+        "method": "consistent_entity_renaming_and_fixed_action_aliases",
+        "entity_mapping": {
+          "desk 1": "desk instance_A",
+          "book 1": "book instance_A",
+          "bowl 1": "bowl instance_A",
+          "cd 2": "cd instance_A",
+          "cellphone 2": "cellphone instance_A",
+          "laptop 1": "laptop instance_A",
+          "mug 1": "mug instance_A",
+          "pen 1": "pen instance_A",
+          "drawer 1": "drawer instance_A",
+          "cellphone 1": "cellphone instance_B",
+          "drawer 2": "drawer instance_B",
+          "cd 1": "cd instance_B",
+          "drawer 3": "drawer instance_C",
+          "creditcard 3": "creditcard instance_A",
+          "pencil 1": "pencil instance_A",
+          "drawer 4": "drawer instance_D",
+          "cd 3": "cd instance_C",
+          "keychain 3": "keychain instance_A",
+          "pencil 3": "pencil instance_B",
+          "drawer 5": "drawer instance_E",
+          "keychain 2": "keychain instance_B",
+          "shelf 1": "shelf instance_A",
+          "alarmclock 2": "alarmclock instance_A",
+          "alarmclock 1": "alarmclock instance_B",
+          "creditcard 2": "creditcard instance_B",
+          "creditcard 1": "creditcard instance_C",
+          "keychain 1": "keychain instance_C"
+        },
+        "grounded_trajectory_id": "alfworld:4059df0b8133:r3"
+      }
+    },
+    {
+      "triplet_id": "cal-04",
+      "benchmark": "alfworld",
+      "task_id": "json_2.1.1/train/pick_two_obj_and_place-CreditCard-None-Sofa-207/trial_T20190909_085924_009925",
+      "split": "train",
+      "anchor_trajectory_id": "alfworld:273bf43df092:r1",
+      "outcome": false,
+      "candidate_slots": {
+        "A": {
+          "role": "surface_equivalent",
+          "source_trajectory_id": null
+        },
+        "B": {
+          "role": "natural_far",
+          "source_trajectory_id": "alfworld:273bf43df092:r3"
+        },
+        "C": {
+          "role": "natural_near",
+          "source_trajectory_id": "alfworld:273bf43df092:r4"
+        }
+      },
+      "natural_candidate_normalized_action_edit": {
+        "near": 0.3,
+        "far": 0.75
+      },
+      "surface_transform": {
+        "method": "consistent_entity_renaming_and_fixed_action_aliases",
+        "entity_mapping": {
+          "coffeetable 1": "coffeetable instance_A",
+          "creditcard 2": "creditcard instance_A",
+          "houseplant 1": "houseplant instance_A",
+          "shelf 1": "shelf instance_A",
+          "shelf 2": "shelf instance_B",
+          "shelf 3": "shelf instance_C",
+          "shelf 4": "shelf instance_D",
+          "shelf 5": "shelf instance_E",
+          "shelf 8": "shelf instance_F",
+          "vase 3": "vase instance_A",
+          "shelf 7": "shelf instance_G",
+          "shelf 6": "shelf instance_H",
+          "sofa 1": "sofa instance_A",
+          "box 1": "box instance_A",
+          "pillow 1": "pillow instance_A",
+          "tvstand 1": "tvstand instance_A",
+          "keychain 1": "keychain instance_A",
+          "remotecontrol 1": "remotecontrol instance_A",
+          "statue 1": "statue instance_A",
+          "television 1": "television instance_A",
+          "vase 2": "vase instance_B",
+          "vase 1": "vase instance_C",
+          "watch 1": "watch instance_A"
+        },
+        "grounded_trajectory_id": "alfworld:273bf43df092:r1"
+      }
+    },
+    {
+      "triplet_id": "cal-05",
+      "benchmark": "taubench_retail",
+      "task_id": "14",
+      "split": "train",
+      "anchor_trajectory_id": "taubench-retail:14:r1",
+      "outcome": false,
+      "candidate_slots": {
+        "A": {
+          "role": "natural_far",
+          "source_trajectory_id": "taubench-retail:14:r3"
+        },
+        "B": {
+          "role": "surface_equivalent",
+          "source_trajectory_id": null
+        },
+        "C": {
+          "role": "natural_near",
+          "source_trajectory_id": "taubench-retail:14:r2"
+        }
+      },
+      "natural_candidate_normalized_action_edit": {
+        "near": 0.36363636363636365,
+        "far": 1.0
+      },
+      "surface_transform": {
+        "method": "consistent_identifier_anonymization_and_tool_serialization",
+        "identifier_mapping": {
+          "12345": "<ORDER_A>",
+          "67890": "<ID_A>",
+          "credit_card_0000000": "<ID_B>",
+          "98765": "<ORDER_B>",
+          "mia.garcia2723@example.com": "<EMAIL_A>",
+          "mia_garcia_4516": "<ID_C>",
+          "#W5490111": "<ORDER_C>",
+          "credit_card_3124723": "<ID_D>",
+          "1421289881": "<ID_E>",
+          "#W7387996": "<ORDER_D>"
+        },
+        "grounded_trajectory_id": "taubench-retail:14:r1"
+      }
+    },
+    {
+      "triplet_id": "cal-06",
+      "benchmark": "taubench_retail",
+      "task_id": "30",
+      "split": "train",
+      "anchor_trajectory_id": "taubench-retail:30:r2",
+      "outcome": false,
+      "candidate_slots": {
+        "A": {
+          "role": "natural_near",
+          "source_trajectory_id": "taubench-retail:30:r1"
+        },
+        "B": {
+          "role": "natural_far",
+          "source_trajectory_id": "taubench-retail:30:r3"
+        },
+        "C": {
+          "role": "surface_equivalent",
+          "source_trajectory_id": null
+        }
+      },
+      "natural_candidate_normalized_action_edit": {
+        "near": 0.3333333333333333,
+        "far": 0.36363636363636365
+      },
+      "surface_transform": {
+        "method": "consistent_identifier_anonymization_and_tool_serialization",
+        "identifier_mapping": {
+          "olivia_lopez_3865": "<ID_A>",
+          "#W9319364": "<ORDER_A>",
+          "#W9373487": "<ORDER_B>",
+          "#W2692684": "<ORDER_C>",
+          "#W5481803": "<ORDER_D>",
+          "#W7449508": "<ORDER_E>",
+          "3788616824": "<ID_B>",
+          "gift_card_7711863": "<ID_C>",
+          "olivia.lopez4535@example.com": "<EMAIL_A>"
+        },
+        "grounded_trajectory_id": "taubench-retail:30:r2"
+      }
+    },
+    {
+      "triplet_id": "cal-07",
+      "benchmark": "taubench_retail",
+      "task_id": "47",
+      "split": "train",
+      "anchor_trajectory_id": "taubench-retail:47:r2",
+      "outcome": false,
+      "candidate_slots": {
+        "A": {
+          "role": "surface_equivalent",
+          "source_trajectory_id": null
+        },
+        "B": {
+          "role": "natural_near",
+          "source_trajectory_id": "taubench-retail:47:r3"
+        },
+        "C": {
+          "role": "natural_far",
+          "source_trajectory_id": "taubench-retail:47:r0"
+        }
+      },
+      "natural_candidate_normalized_action_edit": {
+        "near": 0.2,
+        "far": 0.8888888888888888
+      },
+      "surface_transform": {
+        "method": "consistent_identifier_anonymization_and_tool_serialization",
+        "identifier_mapping": {
+          "9502126": "<ORDER_A>",
+          "9502127": "<ORDER_B>",
+          "W9502127": "<ORDER_C>",
+          "daiki_johnson_9523": "<USER_A>"
+        },
+        "grounded_trajectory_id": "taubench-retail:47:r2"
+      }
+    },
+    {
+      "triplet_id": "cal-08",
+      "benchmark": "taubench_retail",
+      "task_id": "57",
+      "split": "train",
+      "anchor_trajectory_id": "taubench-retail:57:r1",
+      "outcome": true,
+      "candidate_slots": {
+        "A": {
+          "role": "natural_near",
+          "source_trajectory_id": "taubench-retail:57:r3"
+        },
+        "B": {
+          "role": "surface_equivalent",
+          "source_trajectory_id": null
+        },
+        "C": {
+          "role": "natural_far",
+          "source_trajectory_id": "taubench-retail:57:r0"
+        }
+      },
+      "natural_candidate_normalized_action_edit": {
+        "near": 0.6666666666666666,
+        "far": 1.0
+      },
+      "surface_transform": {
+        "method": "consistent_identifier_anonymization_and_tool_serialization",
+        "identifier_mapping": {
+          "W4284542": "<ORDER_A>",
+          "ivan_hernandez_6923": "<USER_A>"
+        },
+        "grounded_trajectory_id": "taubench-retail:57:r1"
+      }
+    }
+  ]
+}

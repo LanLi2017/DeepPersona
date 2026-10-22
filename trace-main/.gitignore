@@ -1,0 +1,17 @@
+.codex/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+
+# Generated experiment outputs; curated G1 data under data/g1 is versioned.
+outputs/
+envs/
+
+# AppWorld data and derivatives (task text, trajectories, judge outputs, digests) may only be
+# redistributed publicly in encrypted form; keep them local.
+data/g1/prevalence_audit/
+data/g1/prevalence_audit_smoke/
+data/g1/generated_audit*/
+data/g1/review_digest/*
+!data/g1/review_digest/judge_spotcheck_Lan.jsonl
+annotation/*_data.js
