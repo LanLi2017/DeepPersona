@@ -22,6 +22,19 @@ HQ-E2 = 多数票为 E2，且两条轨迹都是高质量。
 流程：GPT-5.6 为每个任务写最多 3 个决策不同的方案 → GPT-5.6 和 Haiku 4.5 分别在"无方案"和"每个方案"条件下执行 →
 AppWorld 状态测试判成功 → 用写操作集合（含布尔参数实际值）初筛 → 三方 judge 盲审。
 
+| 步骤 | 脚本（`trace-main/scripts/`） | 命令示例（batch2） |
+|---|---|---|
+| 1. 写方案 | `appworld_targeted_rollout.py --stage plans` | `APPWORLD_ROOT=envs/appworld_root envs/appworld/bin/python scripts/appworld_targeted_rollout.py --stage plans --run batch2 --only other --axes v2` |
+| 2. 按方案执行（造 E2 的核心） | `appworld_targeted_rollout.py --stage rollouts` | `... --stage rollouts --run batch2 --only other --workers 4` |
+| 3. 成功率与 proxy 初筛 | `summarize_appworld_targeted.py` | `../.venv/bin/python scripts/summarize_appworld_targeted.py --run batch2` |
+| 4. 挑选并打包轨迹对 | `build_generated_review.py` | `... scripts/build_generated_review.py --run batch2 --out generated_audit_b2 --prefix g2` |
+| 5. 三方 judge | `run_prevalence_judge.py` | `... scripts/run_prevalence_judge.py --judge {gpt56,kimi,opus} --input data/g1/generated_audit_b2/judge_packets.jsonl` |
+| 6. 中文摘要 + 人工抽查页 | `build_judge_digest.py` | `... scripts/build_judge_digest.py`（页面 `annotation/judge_review.html`） |
+| 7. 本报告 | `summarize_g1_generation.py` | `... scripts/summarize_g1_generation.py` |
+
+batch1 用 `--run pilot --only route`（默认 `--axes v1`：route / information_source / recovery）；
+batch2 用 `--axes v2`（route / subgoal_order / write_parameters / recovery）。自然分布部分用 `replay_appworld.py`、`build_prevalence_audit.py`、`summarize_prevalence_audit.py`。
+
 ### batch1（84 次 rollout，12 个任务）
 
 | 模型 | 条件 | 成功 | 费用 |
