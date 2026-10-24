@@ -12,4 +12,5 @@ logs/
 
 
 refs/
-.claude/
+.claude/*
+!.claude/skills/
